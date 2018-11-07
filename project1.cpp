@@ -19,12 +19,16 @@ using namespace std;
 class Vertex
 {
 public:
-	GLint x;
-	GLint y;
 	GLfloat xf;
 	GLfloat yf;
 	Vertex(int, int);
+	Vertex(float, float);
+	Vertex(const Vertex&);
 	void update(int, int);
+	void update(float xf, float yf);
+	Vertex operator-(Vertex v1);
+	Vertex operator+(Vertex v1);
+	Vertex operator*(float c);
 	friend ostream& operator<<(ostream &strm, const Vertex &v);
 };
 
@@ -33,18 +37,52 @@ Vertex::Vertex(int x, int y)
 	update(x,y);
 }
 
+Vertex::Vertex(float xf, float yf)
+{
+	update(xf, yf);
+}
+
+Vertex::Vertex(const Vertex &v)
+{
+	update(v.xf, v.yf);
+}
+
 void Vertex::update(int x, int y)
 {
-	this->x = x;
-	this->y = y;
 	this->xf = x / HALF_WINDWOW_WIDTH_F - 1.0;
 	this->yf = - (y / HALF_WINDWOW_HEIGHT_F - 1.0);
+//	cout << "(" << x << " " << y << ") [" << xf << " " << yf << "]" << endl << endl;
 	glutPostRedisplay();
+}
+
+void Vertex::update(float xf, float yf)
+{
+	this->xf = xf;
+	this->yf = yf;
+	glutPostRedisplay();
+}
+
+Vertex Vertex::operator-(Vertex v)
+{
+	Vertex retv = Vertex(xf - v.xf, yf - v.yf);
+	return retv;
+}
+
+Vertex Vertex::operator+(Vertex v)
+{
+	Vertex retv = Vertex(xf + v.xf, yf + v.yf);
+	return retv;
+}
+
+Vertex Vertex::operator*(float c)
+{
+	Vertex retv = Vertex(xf*c, yf*c);
+	return retv;
 }
 
 ostream& operator<<(ostream &strm, const Vertex &v)
 {
-	return strm << "Vertex(" << v.x << ", " << v.y << ")" << endl;
+	return strm << "Vertex(" << v.xf << ", " << v.yf << ")" << endl;
 }
 
 
@@ -59,8 +97,12 @@ void window_display(void);
 void resize_window(int width, int height);
 void menu_handler(int value);
 void mouse_event_handler(int button, int state, int x, int y);
+inline void cancel_drawing(void);
 void finalize(void);
 void draw_polygons(void);
+inline float crossproduct(Vertex v1, Vertex v2);
+bool intersecting_polygon(Polygon *p);
+Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4);
 
 /* Global Data */
 int window_id, state = NORMAL;
@@ -96,6 +138,17 @@ int main(int argc, char **argv)
 	glutCreateMenu(&menu_handler);
 	glutAddSubMenu("ACTION", action_smenuid);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
+
+#if 0
+	// For checking intersection(...);
+//	Vertex v1(0,0), v2(600,500), v3(0,500), v4(600,0); // Vertical line segments
+//	Vertex v1(0,0), v2(600,500), v3(300,0), v4(600,250); // Parallel line segments
+	Vertex v1(0,0), v2(600,500), v4(300,0), v3(600,250); // Parallel line segments
+	if (intersection(&v1, &v2, &v3, &v4) != NULL)\
+		cout << "INTERSECTS"<< endl;
+	else
+		cout << "DOESN'T"<< endl;
+#endif
 
 	// Enter the GLUT event processing loop.
 	// This function should never return.
@@ -143,15 +196,26 @@ void mouse_event_handler(int button, int state, int x, int y)
 		{
 			glutDetachMenu(GLUT_RIGHT_BUTTON);
 			polygons.back().vertices.push_back(Vertex(x, y));
+			if (intersecting_polygon(&polygons.back()) == true)
+			{
+				cerr << "You created an intersecting polygon." << 
+					" Nothing to be saved!" << endl;
+				polygons.pop_back();
+				cancel_drawing();
+			}
 		}
 		if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
 		{
-			glutAttachMenu(GLUT_RIGHT_BUTTON);
-			::state = NORMAL;
+			cancel_drawing();
 		}
 	}
 }
 
+inline void cancel_drawing(void)
+{
+	glutAttachMenu(GLUT_RIGHT_BUTTON);
+	::state = NORMAL;
+}
 
 void finalize(void)
 {
@@ -179,4 +243,70 @@ void draw_polygons(void)
 	glFlush();
 }
 
+/*
+ * Checks if two vectors (AB and CD) intersect.
+ * A = v1, B = v2, C = v3, D = v4
+ */
+Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4)
+{
+	float   denom, l, k;
+
+	if (!v1 || !v2 || !v3 || !v4)
+		return NULL;
+
+	Vertex p1 = *v1,
+	       p2 = *v2,
+	       p3 = *v3,
+	       p4 = *v4;
+
+//	cout << "Ap1: " << p1 <<"Ap2: " << p2 << "Ap3: " <<p3 <<"Ap4: " << p4 << endl;
+	denom = crossproduct(p2-p1, p4-p3);
+	
+	l = crossproduct(p3-p1, p4-p3) /  denom;
+	k = crossproduct(p1-p3, p2-p1) / -denom;
+
+#if 0
+	cout << "l: " << l << " k: "<< k << " denom: " << denom << endl;
+	cout << "p1: " << p1 <<"p2: " << p2 << "p3: " <<p3 <<"p4: " << p4 << endl;
+	cout << p1 + (p2-p1)*l;
+#endif
+	if (l > 0 && l < 1 && k > 0 && k < 1 && denom != 0)
+	{
+		return new Vertex(p1 + (p2-p1)*l);
+	}
+
+	return NULL;
+}
+
+inline float crossproduct(Vertex v1, Vertex v2)
+{
+	return ((v2.yf * v1.xf) - (v2.xf * v1.yf));
+}
+
+bool intersecting_polygon(Polygon *p)
+{
+	unsigned int i, j;
+	unsigned int vnum = p->vertices.size();
+
+	if (vnum < 4)
+		return false;
+
+	for (i = 0; i < vnum-1; i++)
+	{
+		for (j = i+1; j < vnum; j++)
+		{
+			if (intersection(&(p->vertices[i]),
+						&(p->vertices[i+1]),
+						&(p->vertices[j]),
+						&(p->vertices[(j+1) % vnum])) != NULL)
+			{
+//				cout << "INTERSECTS" << endl;
+//				cout << p->vertices[i] << p->vertices[i+1] <<
+//					p->vertices[j] << p->vertices[(j+1)%vnum] << endl;
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
