@@ -3,7 +3,7 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
-#include <math.h>
+#include <cmath>
 
 /* Global Definitions */
 #define WINDOW_WIDTH		600
@@ -40,7 +40,7 @@
 
 enum color_e  {BLACK, WHITE, RED, GREEN, BLUE, YELLOW, SIENNA, ORANGE, INDIGO,
                MAGENTA, VIOLET, SILVER, ROYAL_BLUE, CYAN, CHARTREUSE, GOLD};
-enum option_e {MENU_EXIT, MENU_POLYGON, MENU_MOVE_VERTEX};
+enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX};
 enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX};
 
 typedef struct color_s
@@ -127,6 +127,7 @@ bool Vertex::in_range(int x, int y, int radial)
 {
 	float xf = X_TO_XF(x),
 	      yf = Y_TO_YF(y);
+
 	return (DISTANCE(this->xf, xf) <= X_MOVE_THRESHOLD(radial) &&
 			DISTANCE(this->yf, yf) <= Y_MOVE_THRESHOLD(radial));
 }
@@ -312,6 +313,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 			Vertex old_vertex = Vertex(*moving_vertex);
 			if (moving_vertex)
 				moving_vertex->update(x, y);
+
 			if (intersecting_polygon(&(polygons[editing_polygon_index])) == true)
 			{
 				moving_vertex->update(old_vertex.xf, old_vertex.yf);
