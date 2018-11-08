@@ -16,8 +16,39 @@
 #define X_MOVE_THRESHOLD(r)	((r) / HALF_WINDOW_WIDTH_F)
 #define Y_MOVE_THRESHOLD(r)	((r) / HALF_WINDOW_HEIGHT_F)
 
+#define NUM_OF_COLORS		16
+#define ENTRY(x,offset)		#x,x+offset
+#define COLOR_TO_RGB(x)		color[x].r,color[x].g,color[x].b
+#define ADD_COLOR_ENTRIES(offset) {                         \
+		glutAddMenuEntry(ENTRY(BLACK,offset));      \
+		glutAddMenuEntry(ENTRY(WHITE,offset));      \
+		glutAddMenuEntry(ENTRY(RED,offset));        \
+		glutAddMenuEntry(ENTRY(GREEN,offset));      \
+		glutAddMenuEntry(ENTRY(BLUE,offset));       \
+		glutAddMenuEntry(ENTRY(YELLOW,offset));     \
+		glutAddMenuEntry(ENTRY(SIENNA,offset));     \
+		glutAddMenuEntry(ENTRY(ORANGE,offset));     \
+		glutAddMenuEntry(ENTRY(INDIGO,offset));     \
+		glutAddMenuEntry(ENTRY(MAGENTA,offset));    \
+		glutAddMenuEntry(ENTRY(VIOLET,offset));     \
+		glutAddMenuEntry(ENTRY(SILVER,offset));     \
+		glutAddMenuEntry(ENTRY(ROYAL_BLUE,offset)); \
+		glutAddMenuEntry(ENTRY(CYAN,offset));       \
+		glutAddMenuEntry(ENTRY(CHARTREUSE,offset)); \
+		glutAddMenuEntry(ENTRY(GOLD,offset));       \
+	}
+
+enum color_e  {BLACK, WHITE, RED, GREEN, BLUE, YELLOW, SIENNA, ORANGE, INDIGO,
+               MAGENTA, VIOLET, SILVER, ROYAL_BLUE, CYAN, CHARTREUSE, GOLD};
 enum option_e {MENU_EXIT, MENU_POLYGON, MENU_MOVE_VERTEX};
 enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX};
+
+typedef struct color_s
+{
+	GLubyte r;
+	GLubyte g;
+	GLubyte b;
+} color_t;
 
 using namespace std;
 
@@ -104,7 +135,16 @@ class Polygon
 {
 public:
 	vector<Vertex> vertices;
+	color_e line_clr;
+	color_e fill_clr;
+	Polygon(color_e, color_e);
 };
+
+Polygon::Polygon(color_e line, color_e fill)
+{
+	line_clr = line;
+	fill_clr = fill;
+}
 
 /* Function Prototypes */
 void window_display(void);
@@ -119,13 +159,30 @@ bool intersecting_polygon(Polygon *p);
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4);
 
 /* Global Data */
+color_t color[NUM_OF_COLORS] = {{0x00, 0x00, 0x00},  // BLACK
+                                {0xff, 0xff, 0xff},  // WHITE
+                                {0xff, 0x00, 0x00},  // RED
+                                {0x00, 0x80, 0x00},  // GREEN
+                                {0x00, 0x00, 0xff},  // BLUE
+                                {0xff, 0xff, 0x00},  // YELLOW
+                                {0xa0, 0x52, 0x2d},  // SIENNA
+                                {0xff, 0xa5, 0x00},  // ORANGE
+                                {0x4b, 0x00, 0x82},  // INDIGO
+                                {0xff, 0x00, 0xff},  // MAGENTA
+                                {0xee, 0x82, 0xee},  // VIOLET
+                                {0xc0, 0xc0, 0xc0},  // SILVER
+                                {0x41, 0x69, 0xe1},  // ROYAL_BLUE
+                                {0x00, 0xff, 0xff},  // CYAN
+                                {0x7f, 0xff, 0x00},  // CHARTREUSE
+                                {0xff, 0xd7, 0x00}}; // GOLD
+
 int window_id, state = NORMAL;
 vector<Polygon> polygons;
-
+color_e line_clr = BLACK, fill_clr = WHITE;
 
 int main(int argc, char **argv)
 {
-	int action_smenuid;
+	int action_smenuid, lineclr_smenuid, fillclr_smenuid;
 
 	// Initialize GLUT lib and negotiate a session with the window system
 	glutInit(&argc, argv);
@@ -150,10 +207,18 @@ int main(int argc, char **argv)
 	glutAddMenuEntry("Exit", MENU_EXIT);
 	glutAddMenuEntry("Polygon", MENU_POLYGON);
 	glutAddMenuEntry("Move Vertex", MENU_MOVE_VERTEX);
+	lineclr_smenuid = glutCreateMenu(&menu_handler);
+	ADD_COLOR_ENTRIES(0);
+	fillclr_smenuid = glutCreateMenu(&menu_handler);
+	ADD_COLOR_ENTRIES(NUM_OF_COLORS);
 
 	glutCreateMenu(&menu_handler);
 	glutAddSubMenu("ACTION", action_smenuid);
+	glutAddSubMenu("LINE_COLOR", lineclr_smenuid);
+	glutAddSubMenu("FILL_COLOR", fillclr_smenuid);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
+
+
 
 #if 0
 	// For checking intersection(...);
@@ -198,11 +263,16 @@ void menu_handler(int value)
 			break;
 		case MENU_POLYGON:
 			state = DRAWING_POLYGON;
-			polygons.push_back(Polygon());
+			polygons.push_back(Polygon(line_clr, fill_clr));
 			break;
 		case MENU_MOVE_VERTEX:
 			state = MOVING_VERTEX;
 			break;
+		default:
+			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
+				line_clr = (color_e) value;
+			else if (value >= BLACK + NUM_OF_COLORS && value < (NUM_OF_COLORS<<1))
+				fill_clr = (color_e) value;
 	}
 }
 
@@ -287,7 +357,7 @@ void draw_polygons(void)
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
-		glColor3ub(0x00, 0x00, 0x00);
+		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
 			glVertex3f(p->vertices[i].xf, p->vertices[i].yf, 0.0f);
