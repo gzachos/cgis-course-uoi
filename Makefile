@@ -2,7 +2,7 @@
 
 CXX = g++
 CPPFLAGS = -g -Wall
-LDLIBS = -lGL -lglut
+LDLIBS = -lGL -lGLU -lglut
 
 all:
 	$(CXX) $(CPPFLAGS) project1.cpp $(LDLIBS) 

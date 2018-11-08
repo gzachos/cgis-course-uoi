@@ -8,13 +8,7 @@
 /* Global Definitions */
 #define WINDOW_WIDTH		600
 #define WINDOW_HEIGHT		500
-#define HALF_WINDOW_WIDTH_F	300.0f
-#define HALF_WINDOW_HEIGHT_F	250.0f
 #define DISTANCE(x,y)		abs((x)-(y))
-#define X_TO_XF(x)		((x) / HALF_WINDOW_WIDTH_F - 1.0)
-#define Y_TO_YF(y)		(- ((y) / HALF_WINDOW_HEIGHT_F - 1.0))
-#define X_MOVE_THRESHOLD(r)	((r) / HALF_WINDOW_WIDTH_F)
-#define Y_MOVE_THRESHOLD(r)	((r) / HALF_WINDOW_HEIGHT_F)
 
 #define NUM_OF_COLORS		16
 #define ENTRY(x,offset)		#x,x+offset
@@ -56,13 +50,11 @@ using namespace std;
 class Vertex
 {
 public:
-	GLfloat xf;
-	GLfloat yf;
+	GLint x;
+	GLint y;
 	Vertex(int, int);
-	Vertex(float, float);
 	Vertex(const Vertex&);
 	void update(int, int);
-	void update(float xf, float yf);
 	Vertex operator-(Vertex v1);
 	Vertex operator+(Vertex v1);
 	Vertex operator*(float c);
@@ -75,61 +67,45 @@ Vertex::Vertex(int x, int y)
 	update(x,y);
 }
 
-Vertex::Vertex(float xf, float yf)
-{
-	update(xf, yf);
-}
-
 Vertex::Vertex(const Vertex &v)
 {
-	update(v.xf, v.yf);
+	update(v.x, v.y);
 }
 
 void Vertex::update(int x, int y)
 {
-	this->xf = X_TO_XF(x);
-	this->yf = Y_TO_YF(y);
-//	cout << "(" << x << " " << y << ") [" << xf << " " << yf << "]" << endl << endl;
-	glutPostRedisplay();
-}
-
-void Vertex::update(float xf, float yf)
-{
-	this->xf = xf;
-	this->yf = yf;
+	this->x = x;
+	this->y = y;
+//	cout << "(" << x << " " << y << ") [" << x << " " << y << "]" << endl << endl;
 	glutPostRedisplay();
 }
 
 Vertex Vertex::operator-(Vertex v)
 {
-	Vertex retv = Vertex(xf - v.xf, yf - v.yf);
+	Vertex retv = Vertex(x - v.x, y - v.y);
 	return retv;
 }
 
 Vertex Vertex::operator+(Vertex v)
 {
-	Vertex retv = Vertex(xf + v.xf, yf + v.yf);
+	Vertex retv = Vertex(x + v.y, y + v.y);
 	return retv;
 }
 
 Vertex Vertex::operator*(float c)
 {
-	Vertex retv = Vertex(xf*c, yf*c);
+	Vertex retv = Vertex(x*c, y*c);
 	return retv;
 }
 
 ostream& operator<<(ostream &strm, const Vertex &v)
 {
-	return strm << "Vertex(" << v.xf << ", " << v.yf << ")" << endl;
+	return strm << "Vertex(" << v.x << ", " << v.y << ")" << endl;
 }
 
 bool Vertex::in_range(int x, int y, int radial)
 {
-	float xf = X_TO_XF(x),
-	      yf = Y_TO_YF(y);
-
-	return (DISTANCE(this->xf, xf) <= X_MOVE_THRESHOLD(radial) &&
-			DISTANCE(this->yf, yf) <= Y_MOVE_THRESHOLD(radial));
+	return (DISTANCE(this->x, x) <= radial && DISTANCE(this->y, y) <= radial);
 }
 
 class Polygon
@@ -244,6 +220,9 @@ void window_display()
 {
 	glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluOrtho2D(0.0, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0 );
 	draw_polygons();
 	glFlush();
 }
@@ -310,15 +289,17 @@ void mouse_event_handler(int button, int state, int x, int y)
 
 		if (state == GLUT_UP)
 		{
-			Vertex old_vertex = Vertex(*moving_vertex);
 			if (moving_vertex)
-				moving_vertex->update(x, y);
-
-			if (intersecting_polygon(&(polygons[editing_polygon_index])) == true)
 			{
-				moving_vertex->update(old_vertex.xf, old_vertex.yf);
-				cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
+				Vertex *old_vertex = new Vertex(*moving_vertex);
+				moving_vertex->update(x, y);
+				if (intersecting_polygon(&(polygons[editing_polygon_index])) == true)
+				{
+					moving_vertex->update(old_vertex->x, old_vertex->y);
+					cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
+				}
 			}
+
 			::state = NORMAL;
 			editing_polygon_index = -1;
 			moving_vertex = NULL;
@@ -333,8 +314,8 @@ void mouse_event_handler(int button, int state, int x, int y)
 				{
 					editing_polygon_index = p - polygons.begin();
 					moving_vertex = &(p->vertices[i]);
-//					cout << "In range of: (" << moving_vertex->xf << ", " <<
-//						moving_vertex->yf << ")" << endl;
+					cout << "In range of: (" << moving_vertex->x << ", " <<
+						moving_vertex->y << ")" << endl;
 				}
 			}
 	}
@@ -362,10 +343,10 @@ void draw_polygons(void)
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
-			glVertex3f(p->vertices[i].xf, p->vertices[i].yf, 0.0f);
+			glVertex3i(p->vertices[i].x, p->vertices[i].y, 0);	
 			j = (i + 1) % p->vertices.size();
-			glVertex3f(p->vertices[j].xf, p->vertices[j].yf, 0.0f);
-		//	cout << "(" << p->vertices[i].xf << "," << p->vertices[i].yf << ") ";
+			glVertex3i(p->vertices[j].x, p->vertices[j].y, 0);
+		//	cout << "(" << p->vertices[i].x << "," << p->vertices[i].y << ") ";
 		}
 	}
 	glEnd();
@@ -409,7 +390,7 @@ Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4)
 
 inline float crossproduct(Vertex v1, Vertex v2)
 {
-	return ((v2.yf * v1.xf) - (v2.xf * v1.yf));
+	return ((v2.y * v1.x) - (v2.x * v1.y));
 }
 
 bool intersecting_polygon(Polygon *p)
