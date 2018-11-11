@@ -80,6 +80,7 @@ public:
 	bool operator==(const Vertex rhs);
 	friend ostream& operator<<(ostream &strm, const Vertex &v);
 	bool in_range(int, int, int);
+	bool in_x_range(int, int, int);
 };
 
 Vertex::Vertex(int x, int y)
@@ -133,6 +134,11 @@ bool Vertex::in_range(int x, int y, int radial)
 	return (DISTANCE(this->x, x) <= radial && DISTANCE(this->y, y) <= radial);
 }
 
+bool Vertex::in_x_range(int x, int y, int threshold)
+{
+	return (DISTANCE(this->x, x) <= threshold && this->y == y);
+}
+
 class Polygon
 {
 public:
@@ -144,7 +150,7 @@ public:
 	void maxminy(int *maxp, int *minp);
 	void scanline_fill(void);
 	vector<Vertex> get_intersection_points(Vertex v0, Vertex v1);
-	vector<Vertex> get_intersection_points_clearedup(Vertex v0, Vertex v1);
+	vector<Vertex> get_intersection_points_cleanedup(Vertex v0, Vertex v1);
 };
 
 Polygon::Polygon(color_e line, color_e fill)
@@ -158,6 +164,9 @@ Vertex *Polygon::contains(Vertex v)
 	unsigned int i;
 	for (i = 0; i < vertices.size(); i++)
 		if (vertices[i] == v)
+			return &(vertices[i]);
+	for (i = 0; i < vertices.size(); i++)
+		if (vertices[i].in_x_range(v.x, v.y, 3))
 			return &(vertices[i]);
 	return NULL;
 }
@@ -191,15 +200,37 @@ void Polygon::scanline_fill(void)
 	glColor3ub(COLOR_TO_RGB(this->fill_clr));
 	for (y = maxy; y >= miny; y--)
 	{
-		points = get_intersection_points_clearedup(Vertex(0, y), Vertex(600, y));
+		points = get_intersection_points_cleanedup(Vertex(0, y), Vertex(WINDOW_WIDTH, y));
 		if (points.size() == 0)
 			continue;
-	//	cout <<"y: " <<  y << ": " << points.size() << endl;
+#undef DEBUG
+
+#ifdef DEBUG
+		if (points.size() % 2 != 0)
+		{
+			cout << "ERROR: ";
+			cout << "y: " <<  y << ": " << points.size() << endl;
+			glColor3ub(COLOR_TO_RGB(RED));
+			vector<Vertex> ps = get_intersection_points(Vertex(0, y), Vertex(WINDOW_WIDTH, y));
+			cout << "Points: " << endl;
+			for (unsigned int i = 0; i < ps.size(); i++)
+				cout << ps[i];
+			cout << endl;
+			cout << "Vertices: " << endl;
+			for (unsigned int i = 0; i < vertices.size(); i++)
+				cout << vertices[i];
+			cout << endl << endl;
+
+		}
+#endif
 		for (i = 0; i < points.size()-1; i += 2)
 		{
 			glVertex3i(points[i].x, y, 0);
 			glVertex3i(points[i+1].x, y, 0);
 		}
+#if DEBUG
+		glColor3ub(COLOR_TO_RGB(this->fill_clr));
+#endif
 	}
 }
 
@@ -214,7 +245,9 @@ vector<Vertex> Polygon::get_intersection_points(Vertex v1, Vertex v2)
 
 	for (unsigned int i = 0; i < vnum; i++)
 	{
-		// TODO ignore horizontal lines?
+		/*
+		 * Intersection points of collinear edges are ignored
+		 */
 		ipp = intersection(&v1, &v2, &(vertices[i]), &(vertices[(i+1) % vnum]), false);
 		/*
 		 * Each intersection point that is also a polygon vertex
@@ -223,16 +256,10 @@ vector<Vertex> Polygon::get_intersection_points(Vertex v1, Vertex v2)
 		if (ipp != NULL)
 			points.push_back(*ipp);
 	}
-#if 0
-	cout << "Points: " << endl;
-	for (unsigned int i = 0; i < points.size(); i++)
-		cout << points[i];
-	cout << endl << endl;
-#endif
 	return points;
 }
 
-vector<Vertex> Polygon::get_intersection_points_clearedup(Vertex v0, Vertex v1)
+vector<Vertex> Polygon::get_intersection_points_cleanedup(Vertex v0, Vertex v1)
 {
 	bool sort_by_x(Vertex v0, Vertex v1);
 	vector<Vertex> points = get_intersection_points(v0, v1);
@@ -260,13 +287,12 @@ vector<Vertex> Polygon::get_intersection_points_clearedup(Vertex v0, Vertex v1)
 			 * In the opposite case, we should remove the second Vertex instance.
 			 */
 			if (!((prev_vp->y > curr_vp->y && next_vp->y > curr_vp->y) ||
-					(prev_vp->y < curr_vp->y && next_vp->y < curr_vp->y)))
+					(prev_vp->y < curr_vp->y && next_vp->y < curr_vp->y))) // Equality?
 			{
 				points.erase(pi++);
 			}
 		}
 	}
-
 	return points;
 }
 
@@ -334,10 +360,10 @@ int main(int argc, char **argv)
 	// For checking intersection(...);
 //	Vertex v1(0,0), v2(600,500), v3(0,500), v4(600,0);
 //	Vertex v1(0,0), v2(600,500), v3(600,0), v4(0,500);
-	Vertex v1(0,250), v2(600,250), v3(50,0), v4(50,500); // Vertical line segments
+	Vertex v1(0,250), v2(600,250), v3(50,250), v4(100,251); // Vertical line segments
 //	Vertex v1(0,0), v2(600,500), v3(300,0), v4(600,250); // Parallel line segments
 //	Vertex v1(0,0), v2(600,500), v4(300,0), v3(600,250); // Parallel line segments
-	if (intersection(&v1, &v2, &v3, &v4) != NULL)\
+	if (intersection(&v1, &v2, &v3, &v4, false) != NULL)\
 		cout << "INTERSECTS"<< endl;
 	else
 		cout << "DOESN'T"<< endl;
@@ -398,13 +424,13 @@ void mouse_event_handler(int button, int state, int x, int y)
 		   editing_polygon_index = -1;
 	static Vertex *moving_vertex = NULL;
 	static bool created_polygon = false;
-
 	if (::state == DRAWING_POLYGON)
 	{
 		glutDetachMenu(GLUT_RIGHT_BUTTON);
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
 		{
 			polygons.back().vertices.push_back(Vertex(x, y));
+//			cout << x << "," << y << " - " << endl;
 			if (intersecting_polygon(&polygons.back()) == true)
 			{
 				cerr << "You created an intersecting polygon." <<
@@ -484,7 +510,6 @@ void draw_polygons(void)
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
-//		if (::state != DRAWING_POLYGON)
 		p->scanline_fill();
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
