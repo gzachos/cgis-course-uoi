@@ -313,6 +313,7 @@ vector<Vertex> Polygon::get_intersection_points_cleanedup(Vertex v0, Vertex v1)
 void window_display(void);
 void resize_window(int width, int height);
 void menu_handler(int value);
+void keyboard_event_handler(unsigned char key, int x, int y);
 void mouse_event_handler(int button, int state, int x, int y);
 inline void leave_current_state(void);
 void finalize(void);
@@ -327,6 +328,7 @@ int window_id, state = NORMAL;
 vector<Polygon> polygons;
 color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
+bool show_triangles = false;
 
 int main(int argc, char **argv)
 {
@@ -343,8 +345,8 @@ int main(int argc, char **argv)
 	window_id = glutCreateWindow("Project #1");
 	// Set 'window_display' as the display callback for the current window
 	glutDisplayFunc(&window_display);
-	// Disable the generation of keyboard callbacks
-	glutKeyboardFunc(NULL);
+	// Set 'keyboard_event_handler' as the keyboard callback for the current window
+	glutKeyboardFunc(&keyboard_event_handler);
 	// Set 'mouse_event_handler' as the mouse callback for the current window
 	glutMouseFunc(&mouse_event_handler);
 	// Disable window resizing
@@ -434,6 +436,14 @@ void menu_handler(int value)
 	}
 }
 
+void keyboard_event_handler(unsigned char key, int x, int y)
+{
+	if (key == 'T' || key == 't')
+	{
+		show_triangles = !show_triangles;
+//		cout << "Show triangles: " << ((show_triangles == true) ? "yes" : "no") << endl;
+	}
+}
 
 void mouse_event_handler(int button, int state, int x, int y)
 {
