@@ -100,7 +100,6 @@ void Vertex::update(int x, int y)
 	this->x = x;
 	this->y = y;
 //	cout << "(" << x << " " << y << ") [" << x << " " << y << "]" << endl << endl;
-	glutPostRedisplay();
 }
 
 Vertex Vertex::operator-(Vertex v)
@@ -337,7 +336,7 @@ int main(int argc, char **argv)
 	// Initialize GLUT lib and negotiate a session with the window system
 	glutInit(&argc, argv);
 	// Set initial display mode to RGBA
-	glutInitDisplayMode(GLUT_RGBA);
+	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
 	// Set the initial window size and position respectively
 	glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 	glutInitWindowPosition(-1, -1); // negative values result in the window system determining actual window position
@@ -401,7 +400,7 @@ void window_display()
 	glLoadIdentity();
 	gluOrtho2D(0.0, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0 );
 	draw_polygons();
-	glFlush();
+	glutSwapBuffers();
 }
 
 
@@ -587,7 +586,6 @@ void draw_polygons(void)
 		}
 	}
 	glEnd();
-	glFlush();
 }
 
 /*
