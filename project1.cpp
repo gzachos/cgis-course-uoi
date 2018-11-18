@@ -150,6 +150,32 @@ bool Vertex::in_x_range(int x, int y, int threshold)
 	return (DISTANCE(this->x, x) <= threshold && this->y == y);
 }
 
+class Triangle
+{
+public:
+	Vertex v0;
+	Vertex v1;
+	Vertex v2;
+	Triangle(Vertex v0, Vertex v1, Vertex v2);
+	bool inside_triangle(Vertex v);
+};
+
+Triangle::Triangle(Vertex v0, Vertex v1, Vertex v2)
+	: v0(v0), v1(v1), v2(v2)
+{
+	// nothing else to do here!
+};
+
+inline float crossproduct(Vertex v1, Vertex v2);
+
+bool Triangle::inside_triangle(Vertex v)
+{
+	float a, b, denom = crossproduct(v1, v2);
+	a = (crossproduct(v, v2) - crossproduct(v0, v2)) / denom;
+	b = -(crossproduct(v, v1) - crossproduct(v0, v1)) / denom;
+	return (a >= 0 && b >= 0 && a+b < 1);
+}
+
 class Polygon
 {
 public:
@@ -368,8 +394,6 @@ int main(int argc, char **argv)
 	glutAddSubMenu("LINE_COLOR", lineclr_smenuid);
 	glutAddSubMenu("FILL_COLOR", fillclr_smenuid);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
-
-
 
 #if 0
 	// For checking intersection(...);
