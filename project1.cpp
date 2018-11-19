@@ -11,6 +11,7 @@
 #define WINDOW_HEIGHT		500
 #define DISTANCE(x,y)		abs((x)-(y))
 #define MIN_VERTEX_NUM		3
+#define SHOW_CLIP_POLY_MILLIS	2500
 
 #define NUM_OF_COLORS		16
 #define ENTRY(x,offset)		#x,x+offset
@@ -38,6 +39,7 @@ enum color_e  {BLACK, WHITE, RED, GREEN, BLUE, YELLOW, SIENNA, ORANGE, INDIGO,
                MAGENTA, VIOLET, SILVER, ROYAL_BLUE, CYAN, CHARTREUSE, GOLD};
 enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX, MENU_CLIPPING};
 enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX, CLIPPING};
+enum clipstate_e {CLIPPING_START, CLIPPING_END};
 
 typedef struct color_s
 {
@@ -343,17 +345,20 @@ void mouse_event_handler(int button, int state, int x, int y);
 inline void leave_current_state(void);
 void finalize(void);
 void draw_polygons(void);
+void draw_clipping_polygon(void);
 inline float crossproduct(Vertex v1, Vertex v2);
 bool intersecting_polygon(Polygon *p);
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
 bool sort_by_x(Vertex v0, Vertex v1);
+void clip(Polygon *p);
+bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2);
 
 /* Global Data */
 int window_id, state = NORMAL;
 vector<Polygon> polygons;
 color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
-bool show_triangles = false;
+bool show_triangles = false, show_clipping_polygon = false;
 
 int main(int argc, char **argv)
 {
@@ -415,6 +420,15 @@ int main(int argc, char **argv)
 	return (EXIT_FAILURE);
 }
 
+void timer_func(int value)
+{
+	show_clipping_polygon = (value == 0);
+	glutPostRedisplay();
+	if (value == 0)
+		glutTimerFunc(SHOW_CLIP_POLY_MILLIS, timer_func, CLIPPING_END);
+	else
+		cmin = cmax = NULL;
+}
 
 void window_display()
 {
@@ -424,9 +438,31 @@ void window_display()
 	glLoadIdentity();
 	gluOrtho2D(0.0, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0 );
 	draw_polygons();
+	if (show_clipping_polygon)
+		draw_clipping_polygon();
 	glutSwapBuffers();
 }
 
+void draw_clipping_polygon(void)
+{
+	if (cmin && cmax)
+	{
+		glLineWidth(2.0f);
+		glBegin(GL_LINES);
+		glColor3ub(COLOR_TO_RGB(RED));
+		glVertex3i(cmin->x, cmin->y, 0.0f);
+		glVertex3i(cmax->x, cmin->y, 0.0f);
+		glColor3ub(COLOR_TO_RGB(BLUE));
+		glVertex3i(cmax->x, cmin->y, 0.0f);
+		glVertex3i(cmax->x, cmax->y, 0.0f);
+		glColor3ub(COLOR_TO_RGB(BLACK));
+		glVertex3i(cmax->x, cmax->y, 0.0f);
+		glVertex3i(cmin->x, cmax->y, 0.0f);
+		glVertex3i(cmin->x, cmax->y, 0.0f);
+		glVertex3i(cmin->x, cmin->y, 0.0f);
+		glEnd();
+	}
+}
 
 void resize_window(int width, int height)
 {
@@ -559,20 +595,14 @@ void mouse_event_handler(int button, int state, int x, int y)
 				cerr << "The clipping reactangular cannot be a single point!" << endl;
 				cmin = cmax = NULL; // TODO remove if cmin/cmax are set to NULL after clipping
 			}
-			else if (*v0 < *v1)
-			{
-				cmin = v0;
-				cmax = v1;
-			}
 			else
 			{
-				cmin = v1;
-				cmax = v0;
-			}
-			if (cmin != NULL && cmax != NULL)
-			{
+				cmin = new Vertex(min(v0->x,v1->x), min(v0->y, v1->y));
+				cmax = new Vertex(max(v0->x,v1->x), max(v0->y, v1->y));
 				cout << "(" << cmin->x << "," << cmin->y << ") - (" << cmax->x << "," << cmax->y << ")" << endl;
-				// TODO call the Hodgeman-Sutherland polygon clipping algorithm function
+				glutTimerFunc(0, timer_func, CLIPPING_START);
+				for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
+					clip(&(*p));
 			}
 			leave_current_state();
 			mouse_event_count = 0;
@@ -686,3 +716,99 @@ bool sort_by_x(Vertex v0, Vertex v1)
 {
 	return (v0.x < v1.x);
 }
+
+void clip(Polygon *p)
+{
+	if (cmin == NULL || cmax == NULL || p == NULL)
+		return;
+
+	Vertex cp[8] = {
+		Vertex(0, cmin->y),
+		Vertex(WINDOW_WIDTH, cmin->y),
+		Vertex(cmax->x, 0),
+		Vertex(cmax->x, WINDOW_HEIGHT),
+		Vertex(WINDOW_WIDTH, cmax->y),
+		Vertex(0, cmax->y),
+		Vertex(cmin->x, WINDOW_HEIGHT),
+		Vertex(cmin->x, 0)
+	};
+	
+	vector<Vertex> output_list = p->vertices;
+	Vertex *cp0, *cp1, *ip;
+
+	for (int j = 0; j < 8; j += 2)
+	{
+		cp0 = &(cp[j]);
+		cp1 = &(cp[j+1]);
+
+ 		vector<Vertex> input_list = output_list;
+		output_list.clear();
+		Vertex *s;
+		if (input_list.empty() == false)
+			s = new Vertex(input_list.back());
+		for (unsigned int i = 0; i < input_list.size(); i++)
+		{
+			Vertex *e = &(input_list[i]);
+			if (inside_clip_edge(*e, *cp0, *cp1))
+			{
+				if (!inside_clip_edge(*s, *cp0, *cp1))
+				{
+					ip = intersection(s, e, cp0, cp1, false);
+					if (ip != NULL)
+						output_list.push_back(*ip);
+					else
+						cerr << "A: no intersection point" << endl;
+				}
+				output_list.push_back(input_list[i]);
+			}
+			else if (inside_clip_edge(*s, *cp0, *cp1))
+			{
+				ip = intersection(s, e, cp0, cp1, false);
+				if (ip != NULL)
+					output_list.push_back(*ip);
+				else
+					cerr << "B: no intersection point" << endl;
+			}
+			s = e;
+		}
+	}
+	for (unsigned int i = 0; i < output_list.size(); i++)
+	{
+		if (i == 0)
+			cout << "CLIP: " << endl;
+		cout << output_list[i];
+	}
+	p->vertices = output_list;
+}
+
+bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2)
+{
+#if 0
+	float s,c;
+	if (cp2.x - cp1.x == 0)
+		return false;
+	s = (cp2.y - cp1.y) / (cp2.x - cp1.x),
+	c = (cp1.y*cp2.x - cp2.y*cp1.x) / (cp2.x - cp1.x);
+
+	cout <<endl << p << cp1 << cp2;
+	cout << "s: " << s << " c: " << c << " inside: " << p.y - s*p.x - c << endl;
+	return (p.y - s*p.x - c < 0);
+#endif
+	if (cp1.x == cp2.x)
+	{
+		if (cp1.y < cp2.y)
+			return p.x < cp1.x;
+		else
+			return p.x > cp1.x;
+	}
+	else if (cp1.y == cp2.y)
+	{
+		if (cp1.x < cp2.x)
+			return p.y > cp1.y;
+		else
+			return p.y < cp1.y;
+	}
+	return false;
+}
+
+
