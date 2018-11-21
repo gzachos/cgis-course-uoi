@@ -1,10 +1,6 @@
-#include <iostream>
-#include <vector>
-#include <cmath>
-#include <algorithm>
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include <GL/glut.h>
+
+#include "project1.h"
+#include "triangulate.h"
 
 /* Global Definitions */
 #define WINDOW_WIDTH		600
@@ -48,7 +44,6 @@ typedef struct color_s
 	GLubyte b;
 } color_t;
 
-using namespace std;
 
 color_t color[NUM_OF_COLORS] = {{0x00, 0x00, 0x00},  // BLACK
                                 {0xff, 0xff, 0xff},  // WHITE
@@ -68,24 +63,6 @@ color_t color[NUM_OF_COLORS] = {{0x00, 0x00, 0x00},  // BLACK
                                 {0xff, 0xd7, 0x00}}; // GOLD
 
 /* Class definitions */
-class Vertex
-{
-public:
-	GLint x;
-	GLint y;
-	Vertex(int, int);
-	Vertex(const Vertex&);
-	void update(int, int);
-	Vertex operator-(Vertex v1);
-	Vertex operator+(Vertex v1);
-	Vertex operator*(float c);
-	bool operator==(const Vertex rhs);
-	bool operator!=(const Vertex rhs);
-	bool operator<(const Vertex rhs);
-	friend ostream& operator<<(ostream &strm, const Vertex &v);
-	bool in_range(int, int, int);
-	bool in_x_range(int, int, int);
-};
 
 Vertex::Vertex(int x, int y)
 {
@@ -182,14 +159,16 @@ class Polygon
 {
 public:
 	vector<Vertex> vertices;
+	vector<Triangle> triangles;
 	color_e line_clr;
 	color_e fill_clr;
 	Polygon(color_e, color_e);
 	Vertex *contains(Vertex v);
 	void maxminy(int *maxp, int *minp);
-	void scanline_fill(void);
+#if 0
 	vector<Vertex> get_intersection_points(Vertex v0, Vertex v1);
 	vector<Vertex> get_intersection_points_cleanedup(Vertex v0, Vertex v1);
+#endif
 };
 
 Polygon::Polygon(color_e line, color_e fill)
@@ -225,54 +204,7 @@ void Polygon::maxminy(int *maxp, int *minp)
 	*minp = min;
 }
 
-void Polygon::scanline_fill(void)
-{
-	int maxy, miny, y;
-	unsigned int i;
-	vector<Vertex> points;
-
-	if (vertices.size() < MIN_VERTEX_NUM)
-		return;
-
-	maxminy(&maxy, &miny);
-	glLineWidth(1.0f);
-	glColor3ub(COLOR_TO_RGB(this->fill_clr));
-	for (y = maxy; y >= miny; y--)
-	{
-		points = get_intersection_points_cleanedup(Vertex(0, y), Vertex(WINDOW_WIDTH, y));
-		if (points.size() == 0)
-			continue;
-#undef DEBUG
-
-#ifdef DEBUG
-		if (points.size() % 2 != 0)
-		{
-			cout << "ERROR: ";
-			cout << "y: " <<  y << ": " << points.size() << endl;
-			glColor3ub(COLOR_TO_RGB(RED));
-			vector<Vertex> ps = get_intersection_points(Vertex(0, y), Vertex(WINDOW_WIDTH, y));
-			cout << "Points: " << endl;
-			for (unsigned int i = 0; i < ps.size(); i++)
-				cout << ps[i];
-			cout << endl;
-			cout << "Vertices: " << endl;
-			for (unsigned int i = 0; i < vertices.size(); i++)
-				cout << vertices[i];
-			cout << endl << endl;
-
-		}
-#endif
-		for (i = 0; i < points.size()-1; i += 2)
-		{
-			glVertex3i(points[i].x, y, 0);
-			glVertex3i(points[i+1].x, y, 0);
-		}
-#if DEBUG
-		glColor3ub(COLOR_TO_RGB(this->fill_clr));
-#endif
-	}
-}
-
+#if 0
 vector<Vertex> Polygon::get_intersection_points(Vertex v1, Vertex v2)
 {
 	vector<Vertex> points;
@@ -335,6 +267,7 @@ vector<Vertex> Polygon::get_intersection_points_cleanedup(Vertex v0, Vertex v1)
 	return points;
 }
 
+#endif
 
 /* Function Prototypes */
 void window_display(void);
@@ -345,13 +278,20 @@ void mouse_event_handler(int button, int state, int x, int y);
 inline void leave_current_state(void);
 void finalize(void);
 void draw_polygons(void);
+void draw_polygon_bounds(void);
+void draw_polygon_area(void);
+void draw_polygon_triangles(void);
 void draw_clipping_polygon(void);
 inline float crossproduct(Vertex v1, Vertex v2);
 bool intersecting_polygon(Polygon *p);
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
+#if 0
 bool sort_by_x(Vertex v0, Vertex v1);
-void clip(Polygon *p);
+bool sort_by_y(Vertex v0, Vertex v1);
+#endif
+void sh_clip(Polygon *p);
 bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2);
+void triangulate(Polygon *p);
 
 /* Global Data */
 int window_id, state = NORMAL;
@@ -518,6 +458,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
 		{
 			polygons.back().vertices.push_back(Vertex(x, y));
+			triangulate(&(polygons.back())); // To allow area coloring
 //			cout << x << "," << y << " - " << endl;
 			if (intersecting_polygon(&polygons.back()) == true)
 			{
@@ -557,6 +498,8 @@ void mouse_event_handler(int button, int state, int x, int y)
 					moving_vertex->update(old_vertex->x, old_vertex->y);
 					cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
 				}
+				else // In case a vertex has been updated
+					triangulate(&(polygons[editing_polygon_index]));
 			}
 			leave_current_state();
 			editing_polygon_index = -1;
@@ -602,7 +545,11 @@ void mouse_event_handler(int button, int state, int x, int y)
 				cout << "(" << cmin->x << "," << cmin->y << ") - (" << cmax->x << "," << cmax->y << ")" << endl;
 				glutTimerFunc(0, timer_func, CLIPPING_START);
 				for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
-					clip(&(*p));
+				{
+					sh_clip(&(*p));
+					// Triangulate each polygon after clipping
+					triangulate(&(*p));
+				}
 			}
 			leave_current_state();
 			mouse_event_count = 0;
@@ -622,14 +569,20 @@ void finalize(void)
 	exit(EXIT_SUCCESS);
 }
 
-
 void draw_polygons(void)
+{
+	draw_polygon_area();
+	if (show_triangles == true)
+		draw_polygon_triangles();
+	draw_polygon_bounds();
+}
+
+void draw_polygon_bounds(void)
 {
 	glLineWidth(2.0f);
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
-		p->scanline_fill();
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
@@ -641,6 +594,47 @@ void draw_polygons(void)
 	}
 	glEnd();
 }
+
+void draw_polygon_area(void)
+{
+	glLineWidth(1.0f);
+	glBegin(GL_TRIANGLES);
+	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
+	{
+		glColor3ub(COLOR_TO_RGB(p->fill_clr));
+		for (unsigned int i = 0; i < p->triangles.size(); i++)
+		{
+			Triangle *t = &(p->triangles[i]);
+			glVertex3i(t->v0.x, t->v0.y, 0);
+			glVertex3i(t->v1.x, t->v1.y, 0);
+			glVertex3i(t->v2.x, t->v2.y, 0);
+		}
+	}
+	glEnd();
+}
+
+
+void draw_polygon_triangles(void)
+{
+	glLineWidth(2.0f);
+	glColor3ub(COLOR_TO_RGB(GREEN));
+	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
+	{
+		for (unsigned int i = 0; i < p->triangles.size(); i++)
+		{
+			Triangle *t = &(p->triangles[i]);
+			glBegin(GL_LINES);
+			glVertex3i(t->v0.x, t->v0.y, 0);
+			glVertex3i(t->v1.x, t->v1.y, 0);
+			glVertex3i(t->v1.x, t->v1.y, 0);
+			glVertex3i(t->v2.x, t->v2.y, 0);
+			glVertex3i(t->v2.x, t->v2.y, 0);
+			glVertex3i(t->v0.x, t->v0.y, 0);
+			glEnd();
+		}
+	}
+}
+
 
 /*
  * Checks if two vectors (AB and CD) intersect.
@@ -712,12 +706,19 @@ bool intersecting_polygon(Polygon *p)
 	return false;
 }
 
+#if 0
 bool sort_by_x(Vertex v0, Vertex v1)
 {
 	return (v0.x < v1.x);
 }
 
-void clip(Polygon *p)
+bool sort_by_y(Vertex v0, Vertex v1)
+{
+	return (v0.y < v1.y);
+}
+#endif
+
+void sh_clip(Polygon *p)
 {
 	if (cmin == NULL || cmax == NULL || p == NULL)
 		return;
@@ -732,9 +733,10 @@ void clip(Polygon *p)
 		Vertex(cmin->x, WINDOW_HEIGHT),
 		Vertex(cmin->x, 0)
 	};
-	
+
 	vector<Vertex> output_list = p->vertices;
 	Vertex *cp0, *cp1, *ip;
+//	unsigned int count = 0;
 
 	for (int j = 0; j < 8; j += 2)
 	{
@@ -753,47 +755,44 @@ void clip(Polygon *p)
 			{
 				if (!inside_clip_edge(*s, *cp0, *cp1))
 				{
+					// Case 4: incoming
+//					count--;
 					ip = intersection(s, e, cp0, cp1, false);
 					if (ip != NULL)
 						output_list.push_back(*ip);
 					else
 						cerr << "A: no intersection point" << endl;
 				}
+				// else: Case 1
 				output_list.push_back(input_list[i]);
 			}
 			else if (inside_clip_edge(*s, *cp0, *cp1))
 			{
+				// Case 2: outgoing
+//				count++;
 				ip = intersection(s, e, cp0, cp1, false);
 				if (ip != NULL)
 					output_list.push_back(*ip);
 				else
 					cerr << "B: no intersection point" << endl;
 			}
+			// else: Case 3
 			s = e;
 		}
 	}
+#if 1
 	for (unsigned int i = 0; i < output_list.size(); i++)
 	{
 		if (i == 0)
 			cout << "CLIP: " << endl;
 		cout << output_list[i];
 	}
+#endif
 	p->vertices = output_list;
 }
 
 bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2)
 {
-#if 0
-	float s,c;
-	if (cp2.x - cp1.x == 0)
-		return false;
-	s = (cp2.y - cp1.y) / (cp2.x - cp1.x),
-	c = (cp1.y*cp2.x - cp2.y*cp1.x) / (cp2.x - cp1.x);
-
-	cout <<endl << p << cp1 << cp2;
-	cout << "s: " << s << " c: " << c << " inside: " << p.y - s*p.x - c << endl;
-	return (p.y - s*p.x - c < 0);
-#endif
 	if (cp1.x == cp2.x)
 	{
 		if (cp1.y < cp2.y)
@@ -809,6 +808,28 @@ bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2)
 			return p.y < cp1.y;
 	}
 	return false;
+}
+
+
+void triangulate(Polygon *p)
+{
+	unsigned int i;
+	vector<Vertex> result;
+
+	if (p == NULL)
+		return;
+
+	p->triangles.clear();
+	Triangulate::Process(p->vertices, result);
+
+	for (i = 0; i < result.size(); i += 3)
+	{
+		p->triangles.push_back(Triangle(
+					result[i],
+					result[i+1],
+					result[i+2]));
+	}
+//	cout << "Triangulated: " << p->triangles.size() << endl;
 }
 
 
