@@ -39,8 +39,8 @@ using namespace std;
 
 enum color_e  {BLACK, WHITE, RED, GREEN, BLUE, YELLOW, SIENNA, ORANGE, INDIGO,
                MAGENTA, VIOLET, SILVER, ROYAL_BLUE, CYAN, CHARTREUSE, GOLD};
-enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX, MENU_CLIPPING};
-enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX, CLIPPING};
+enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX, MENU_CLIPPING, MENU_EXTRUDE};
+enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX, CLIPPING, EXTRUSION};
 enum clipstate_e {CLIPPING_START, CLIPPING_END};
 
 typedef struct color_s
@@ -321,7 +321,7 @@ void triangulate(Polygon *p);
 bool Process(const vector<Vertex> &contour, vector<Vertex> &result);
 
 /* Global Data */
-int window_id, state = NORMAL;
+int window_id, state = NORMAL, extrusion_length;
 vector<Polygon> polygons;
 color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
@@ -355,6 +355,7 @@ int main(int argc, char **argv)
 	glutAddMenuEntry("Polygon", MENU_POLYGON);
 	glutAddMenuEntry("Move Vertex", MENU_MOVE_VERTEX);
 	glutAddMenuEntry("Clipping", MENU_CLIPPING);
+	glutAddMenuEntry("Extrude", MENU_EXTRUDE);
 
 	lineclr_smenuid = glutCreateMenu(&menu_handler);
 	ADD_COLOR_ENTRIES(0);
@@ -453,6 +454,12 @@ void menu_handler(int value)
 			break;
 		case MENU_CLIPPING:
 			state = CLIPPING;
+			break;
+		case MENU_EXTRUDE:
+			state = EXTRUSION;
+			cout << "Please provide an extrusion length: ";
+			cin >> extrusion_length; // Check for positive or something else?
+			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
 			break;
 		default:
 			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
@@ -581,6 +588,10 @@ void mouse_event_handler(int button, int state, int x, int y)
 			leave_current_state();
 			mouse_event_count = 0;
 		}
+	}
+	else if (::state == EXTRUSION)
+	{
+		// TODO something
 	}
 }
 
