@@ -74,9 +74,11 @@ class Vertex
 public:
 	GLint x;
 	GLint y;
+	GLint z = 0;
 	Vertex(int, int);
+	Vertex(int, int, int);
 	Vertex(const Vertex&);
-	void update(int, int);
+	void update(int, int, int);
 	Vertex operator-(Vertex v1);
 	Vertex operator+(Vertex v1);
 	Vertex operator*(float c);
@@ -90,18 +92,24 @@ public:
 
 Vertex::Vertex(int x, int y)
 {
-	update(x,y);
+	update(x,y,0);
+}
+
+Vertex::Vertex(int x, int y, int z)
+{
+	update(x,y,z);
 }
 
 Vertex::Vertex(const Vertex &v)
 {
-	update(v.x, v.y);
+	update(v.x, v.y, v.z);
 }
 
-void Vertex::update(int x, int y)
+void Vertex::update(int x, int y, int z)
 {
 	this->x = x;
 	this->y = y;
+	this->z = z;
 //	cout << "(" << x << " " << y << ") [" << x << " " << y << "]" << endl << endl;
 }
 
@@ -308,6 +316,8 @@ void draw_polygon_triangles(void);
 void draw_clipping_polygon(void);
 inline float crossproduct(Vertex v1, Vertex v2);
 bool intersecting_polygon(Polygon *p);
+void extrude_polygons(void);
+void vertex_to_quad(Vertex v);
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
 #if 0
 bool sort_by_x(Vertex v0, Vertex v1);
@@ -460,6 +470,7 @@ void menu_handler(int value)
 			cout << "Please provide an extrusion length: ";
 			cin >> extrusion_length; // Check for positive or something else?
 			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
+			extrude_polygons();
 			break;
 		default:
 			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
@@ -526,10 +537,10 @@ void mouse_event_handler(int button, int state, int x, int y)
 			if (moving_vertex)
 			{
 				Vertex *old_vertex = new Vertex(*moving_vertex);
-				moving_vertex->update(x, y);
+				moving_vertex->update(x, y, 0);
 				if (intersecting_polygon(&(polygons[editing_polygon_index])) == true)
 				{
-					moving_vertex->update(old_vertex->x, old_vertex->y);
+					moving_vertex->update(old_vertex->x, old_vertex->y, 0);
 					cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
 				}
 				else // In case a vertex has been updated
@@ -591,7 +602,9 @@ void mouse_event_handler(int button, int state, int x, int y)
 	}
 	else if (::state == EXTRUSION)
 	{
-		// TODO something
+		// extrude_polygons();
+		// change to 3D view
+		// leave_current_state();
 	}
 }
 
@@ -671,6 +684,42 @@ void draw_polygon_triangles(void)
 			glEnd();
 		}
 	}
+}
+
+/* 
+ * Turns a vertex into a quad (rectangle) using LINE_COLOR
+ */
+void vertex_to_quad(Vertex v) {
+
+}
+
+/* 
+ * Extrudes all polygons to 3D
+ */
+void extrude_polygons() {
+
+	cout << "In extrude_polygons...\n";
+	// for each polygon p
+	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
+	{
+		glBegin(GL_LINES);
+		for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
+		{
+			glColor3ub(COLOR_TO_RGB(p->line_clr));
+			// for each vertex v of p
+			for (unsigned int i = 0; i < p->vertices.size(); i++) 
+			{
+				cout << "vertex " << i << "(" << p->vertices[i].x << "," << p->vertices[i].y << "," << p->vertices[i].z << ")\n";
+				vertex_to_quad(p->vertices[i]); // LINE_COLOR
+			}
+		}
+		glEnd();
+		// base = triangulate_polygon(p, FILL_COLOR)
+		// top = triangulate_polygon(p, FILL_COLOR)
+	}
+	cout << "Leaving extrude_polygons...\n";
+
+
 }
 
 
@@ -1008,8 +1057,10 @@ bool Process(const vector<Vertex> &contour,vector<Vertex> &result)
 			m++;
 
 			/* remove v from remaining polygon */
-			for(s=v,t=v+1;t<nv;s++,t++)
-				V[s] = V[t]; nv--;
+			for(s=v,t=v+1;t<nv;s++,t++) {
+				V[s] = V[t]; 
+			}
+			nv--;
 
 			/* resest error detection counter */
 			count = 2*nv;
