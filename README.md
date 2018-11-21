@@ -9,7 +9,7 @@ A repository for the Computer Graphics and Interaction Systems course projects.
  - [x] <del>Main window & Menu with Exit option</del> [__5%__]
  - [x] <del>Polygon drawing action</del> [__5%__]
  - [x] <del>Check for self-intersecting polygons</del> [__5%__]
- - [ ] Polygon triangulation [__5%__]
+ - [x] <del>Polygon triangulation</del> [__5%__]
  - [x] <del>Polygon coloring (edges + fill)</del> [__5%__]
  - [ ] Polygon clipping using the Hodgeman-Sutherland algorithm [__35%__]
  - [ ] Extrusion in 3D [__40%__]
