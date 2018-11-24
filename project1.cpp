@@ -416,9 +416,11 @@ void timer_func(int value)
 
 void window_display()
 {
+	/* Clear colors and depth */
 	glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 
 	/* projection matrix (camera) */
 	glMatrixMode(GL_PROJECTION);
@@ -430,27 +432,27 @@ void window_display()
 
 	if (state == EXTRUSION)
 	{
-		glClearDepth(1.0);          // Set background depth to farthest
-		glDepthFunc(GL_LESS);   
-	  	glEnable(GL_DEPTH_TEST);	// this breaks the triangulation for some reason
+		/* Enable depth */
+		glClearDepth(1.0);
+		glDepthFunc(GL_LESS);
+	  	glEnable(GL_DEPTH_TEST);
 
 		GLfloat aspect = (GLfloat) WINDOW_WIDTH / (GLfloat) WINDOW_HEIGHT;
 		glViewport(0.0, 0.0, WINDOW_WIDTH, WINDOW_HEIGHT);
 
+		/* Camera perspective */
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
 		gluPerspective(60, aspect, 1.0, 1000.0);
 		
+		/* Model view */
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
 
-		// glTranslatef(0, 0, -100);
-		// glRotatef(40, 1, 1, 0);
 		gluLookAt(posx, posy, posz, lookx, looky, lookz, upx, upy, upz);
 		// draw_grid();
 
  	}
-
 
 	draw_polygons();
 	if (show_clipping_polygon)
@@ -542,7 +544,6 @@ void menu_handler(int value)
 			cout << "Please provide an extrusion length.\nA good value is in the range [50, 200] depending on the size of your polygons.\nExtrusion length: ";
 			cin >> extrusion_length; // Check for positive or something else?
 			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
-			// extrude_polygons();
 			break;
 		default:
 			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
@@ -561,6 +562,7 @@ void keyboard_event_handler(unsigned char key, int x, int y)
 			break;
 		case 'P':
 		case 'p':
+			// keybind for creating polygon
 			menu_handler(MENU_POLYGON);
 			break;
 		case 'W':
@@ -585,12 +587,12 @@ void keyboard_event_handler(unsigned char key, int x, int y)
 			break;
 		case 'Q':
 		case 'q':
-			// move camera right
+			// move camera in
 			posy-=2.0;
 			break;
 		case 'E':
 		case 'e':
-			// move camera right
+			// move camera out
 			posy+=2.0;
 			break;
 	}
@@ -763,6 +765,7 @@ void draw_polygon_bounds(void)
 void draw_polygon_quads(void)
 {
 	glLineWidth(2.0f);
+	glDepthMask(true);
 	/* For each polygon */
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
@@ -785,6 +788,7 @@ void draw_polygon_quads(void)
 			/* Top */
 			glVertex3i(v0.x, v0.y, v0.z - extrusion_length);
 			glVertex3i(v1.x, v1.y, v0.z - extrusion_length);
+			// draw the area too
 			draw_polygon_area(v0.z - extrusion_length);
 		}
 		glEnd();
@@ -792,7 +796,27 @@ void draw_polygon_quads(void)
 		/* 
 		 * Sides 
 		 */
-		glBegin(GL_QUADS);
+		// glBegin(GL_QUADS);
+		// glColor3ub(COLOR_TO_RGB(p->line_clr));
+		// for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		// {
+		// 	j = (i + 1) % p->vertices.size();
+
+		// 	Vertex v0 = p->vertices[i];
+		// 	Vertex v1 = p->vertices[j];
+
+		// 	glVertex3i(v0.x, v0.y, v0.z - extrusion_length);
+		// 	glVertex3i(v1.x, v1.y, v1.z - extrusion_length);
+		// 	glVertex3i(v0.x, v0.y, v0.z);
+		// 	glVertex3i(v1.x, v1.y, v1.z);
+
+		// 	// instead of drawing it as a quad, maybe:
+		// 	// triangulate quad
+		// 	// draw_quad_area(fill color)
+		// }
+		// glEnd();
+
+		glBegin(GL_TRIANGLES);
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
@@ -801,12 +825,18 @@ void draw_polygon_quads(void)
 			Vertex v0 = p->vertices[i];
 			Vertex v1 = p->vertices[j];
 
+			/* triangle 1 */
 			glVertex3i(v0.x, v0.y, v0.z - extrusion_length);
 			glVertex3i(v1.x, v1.y, v1.z - extrusion_length);
 			glVertex3i(v0.x, v0.y, v0.z);
+			/* triangle 2 */
+			glVertex3i(v0.x, v0.y, v0.z);
+			glVertex3i(v1.x, v1.y, v1.z - extrusion_length);
 			glVertex3i(v1.x, v1.y, v1.z);
 		}
 		glEnd();
+
+
 	}
 }
 
