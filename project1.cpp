@@ -332,7 +332,8 @@ void triangulate(Polygon *p);
 bool Process(const vector<Vertex> &contour, vector<Vertex> &result);
 
 /* Global Data */
-int window_id, state = NORMAL, extrusion_length;
+int window_id, state = NORMAL;
+int extrusion_length = 0;
 vector<Polygon> polygons;
 color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
