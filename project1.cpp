@@ -338,7 +338,7 @@ color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
 bool show_triangles = false, show_clipping_polygon = false;
 
-double posx=WINDOW_WIDTH/2, posy=WINDOW_HEIGHT/2, posz=15.0, lookx=0, looky=1, lookz=0, upx=0, upy=0, upz=1;
+double posx=WINDOW_WIDTH + 150, posy=WINDOW_HEIGHT + 100, posz=-150, lookx=0, looky=1, lookz=0, upx=0, upy=0, upz=-1;
 
 
 int main(int argc, char **argv)
@@ -588,6 +588,7 @@ void keyboard_event_handler(unsigned char key, int x, int y)
 			posy+=2.0;
 			break;
 	}
+	// cout << "x, y, z: " << posx << ' ' << posy << ' ' << posz << endl;
 }
 
 void mouse_event_handler(int button, int state, int x, int y)
