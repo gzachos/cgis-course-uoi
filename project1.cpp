@@ -338,6 +338,7 @@ color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
 bool show_triangles = false, show_clipping_polygon = false;
 
+/* In 3D, we want the original polygon to be the base of the new 3D object - we have to manipulate the axes */
 double posx=WINDOW_WIDTH + 150, posy=WINDOW_HEIGHT + 100, posz=-150, lookx=0, looky=1, lookz=0, upx=0, upy=0, upz=-1;
 
 
@@ -417,6 +418,7 @@ void window_display()
 {
 	glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_DEPTH_TEST);
 
 	/* projection matrix (camera) */
 	glMatrixMode(GL_PROJECTION);
@@ -537,7 +539,7 @@ void menu_handler(int value)
 			break;
 		case MENU_EXTRUDE:
 			state = EXTRUSION;
-			cout << "Please provide an extrusion length: ";
+			cout << "Please provide an extrusion length.\nA good value is in the range [50, 200] depending on the size of your polygons.\nExtrusion length: ";
 			cin >> extrusion_length; // Check for positive or something else?
 			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
 			// extrude_polygons();
@@ -556,6 +558,10 @@ void keyboard_event_handler(unsigned char key, int x, int y)
 		case 'T':
 		case 't':
 			show_triangles = !show_triangles;
+			break;
+		case 'P':
+		case 'p':
+			menu_handler(MENU_POLYGON);
 			break;
 		case 'W':
 		case 'w':
