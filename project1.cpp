@@ -311,13 +311,13 @@ inline void leave_current_state(void);
 void finalize(void);
 void draw_polygons(void);
 void draw_polygon_bounds(void);
+void draw_polygon_quads(void);
+void extrude_polygons(void);
 void draw_polygon_area(void);
 void draw_polygon_triangles(void);
 void draw_clipping_polygon(void);
 inline float crossproduct(Vertex v1, Vertex v2);
 bool intersecting_polygon(Polygon *p);
-void extrude_polygons(void);
-void vertex_to_quad(Vertex v);
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
 #if 0
 bool sort_by_x(Vertex v0, Vertex v1);
@@ -343,6 +343,7 @@ int main(int argc, char **argv)
 
 	// Initialize GLUT lib and negotiate a session with the window system
 	glutInit(&argc, argv);
+
 	// Set initial display mode to RGBA
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
 	// Set the initial window size and position respectively
@@ -378,6 +379,12 @@ int main(int argc, char **argv)
 	glutAddSubMenu("FILL_COLOR", fillclr_smenuid);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 
+	glClearDepth(1.0f);                   // Set background depth to farthest
+   	glEnable(GL_DEPTH_TEST);   // Enable depth testing for z-culling
+   	glDepthFunc(GL_LEQUAL);    // Set the type of depth-test
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);  // Nice perspective corrections
+
+
 #if 0
 	// For checking intersection(...);
 //	Vertex v1(0,0), v2(600,500), v3(0,500), v4(600,0);
@@ -411,10 +418,30 @@ void timer_func(int value)
 void window_display()
 {
 	glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	/* projection matrix (camera) */
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluOrtho2D(0.0, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0 );
+
+	gluOrtho2D(0.0, WINDOW_WIDTH, WINDOW_HEIGHT, 0.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	if (state == EXTRUSION)
+	{
+		GLfloat aspect = (GLfloat) WINDOW_WIDTH / (GLfloat) WINDOW_HEIGHT;
+		glViewport(0.0, 0.0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		gluPerspective(45.0f, aspect, 0.1f, 100.0f);
+		
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+ 	}
+
+
 	draw_polygons();
 	if (show_clipping_polygon)
 		draw_clipping_polygon();
@@ -470,7 +497,7 @@ void menu_handler(int value)
 			cout << "Please provide an extrusion length: ";
 			cin >> extrusion_length; // Check for positive or something else?
 			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
-			extrude_polygons();
+			// extrude_polygons();
 			break;
 		default:
 			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
@@ -602,7 +629,6 @@ void mouse_event_handler(int button, int state, int x, int y)
 	}
 	else if (::state == EXTRUSION)
 	{
-		// extrude_polygons();
 		// change to 3D view
 		// leave_current_state();
 	}
@@ -625,7 +651,11 @@ void draw_polygons(void)
 	draw_polygon_area();
 	if (show_triangles == true)
 		draw_polygon_triangles();
-	draw_polygon_bounds();
+
+	if (state == EXTRUSION)
+		draw_polygon_quads();
+	else
+		draw_polygon_bounds();
 }
 
 void draw_polygon_bounds(void)
@@ -637,13 +667,119 @@ void draw_polygon_bounds(void)
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
-			glVertex3i(p->vertices[i].x, p->vertices[i].y, 0);
+			glVertex3i(p->vertices[i].x, p->vertices[i].y, p->vertices[i].z);
 			j = (i + 1) % p->vertices.size();
-			glVertex3i(p->vertices[j].x, p->vertices[j].y, 0);
-//			cout << "(" << p->vertices[i].x << "," << p->vertices[i].y << ") ";
+			glVertex3i(p->vertices[j].x, p->vertices[j].y, p->vertices[j].z);
 		}
 	}
 	glEnd();
+}
+
+void draw_polygon_quads(void)
+{
+	/* Move into the screen by extrusion_length + 1 */
+	/* our polygon has z = 0 though */
+	glTranslatef(1.5f, 0.0, -(extrusion_length + 10));
+
+	/* ****************************************************** */
+
+	glBegin(GL_QUADS);                // Begin drawing the color cube with 6 quads
+	// Top face (y = 1.0f)
+	// Define vertices in counter-clockwise (CCW) order with normal pointing out
+	glColor3f(0.0f, 1.0f, 0.0f);     // Green
+	glVertex3f( 1.0f, 1.0f, -1.0f);
+	glVertex3f(-1.0f, 1.0f, -1.0f);
+	glVertex3f(-1.0f, 1.0f,  1.0f);
+	glVertex3f( 1.0f, 1.0f,  1.0f);
+
+	// Bottom face (y = -1.0f)
+	glColor3f(1.0f, 0.5f, 0.0f);     // Orange
+	glVertex3f( 1.0f, -1.0f,  1.0f);
+	glVertex3f(-1.0f, -1.0f,  1.0f);
+	glVertex3f(-1.0f, -1.0f, -1.0f);
+	glVertex3f( 1.0f, -1.0f, -1.0f);
+
+	// Front face  (z = 1.0f)
+	glColor3f(1.0f, 0.0f, 0.0f);     // Red
+	glVertex3f( 1.0f,  1.0f, 1.0f);
+	glVertex3f(-1.0f,  1.0f, 1.0f);
+	glVertex3f(-1.0f, -1.0f, 1.0f);
+	glVertex3f( 1.0f, -1.0f, 1.0f);
+
+	// Back face (z = -1.0f)
+	glColor3f(1.0f, 1.0f, 0.0f);     // Yellow
+	glVertex3f( 1.0f, -1.0f, -1.0f);
+	glVertex3f(-1.0f, -1.0f, -1.0f);
+	glVertex3f(-1.0f,  1.0f, -1.0f);
+	glVertex3f( 1.0f,  1.0f, -1.0f);
+
+	// Left face (x = -1.0f)
+	glColor3f(0.0f, 0.0f, 1.0f);     // Blue
+	glVertex3f(-1.0f,  1.0f,  1.0f);
+	glVertex3f(-1.0f,  1.0f, -1.0f);
+	glVertex3f(-1.0f, -1.0f, -1.0f);
+	glVertex3f(-1.0f, -1.0f,  1.0f);
+
+	// Right face (x = 1.0f)
+	glColor3f(1.0f, 0.0f, 1.0f);     // Magenta
+	glVertex3f(1.0f,  1.0f, -1.0f);
+	glVertex3f(1.0f,  1.0f,  1.0f);
+	glVertex3f(1.0f, -1.0f,  1.0f);
+	glVertex3f(1.0f, -1.0f, -1.0f);
+	glEnd();  // End of drawing color-cube
+
+	/* ************************************************** */
+
+
+	glLineWidth(2.0f);
+	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
+	{
+		/* Original & copy (base & top) */
+		glBegin(GL_LINES);
+		glColor3ub(COLOR_TO_RGB(p->fill_clr));
+		/* Base */
+		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		{
+			j = (i + 1) % p->vertices.size();
+
+			Vertex v0 = p->vertices[i];
+			Vertex v1 = p->vertices[j];
+
+			glVertex3i(v0.x, v0.y, v0.z);
+			glVertex3i(v1.x, v1.y, v1.z);
+		}
+		/* Top */
+		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		{
+			j = (i + 1) % p->vertices.size();
+
+			Vertex v0 = p->vertices[i];
+			Vertex v1 = p->vertices[j];
+
+			glVertex3i(v0.x, v0.y, -extrusion_length);
+			glVertex3i(v1.x, v1.y, -extrusion_length);
+
+			cout << '(' << v0.x << ',' << v0.y << ',' << -extrusion_length << ')' << endl;
+		}
+		glEnd();
+
+		/* Sides */
+		glBegin(GL_QUADS);
+		glColor3ub(COLOR_TO_RGB(p->line_clr));
+		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		{
+			j = (i + 1) % p->vertices.size();
+
+			Vertex v0 = p->vertices[i];
+			Vertex v1 = p->vertices[j];
+
+			glVertex3i(v0.x, v0.y, -extrusion_length);
+			glVertex3i(v1.x, v1.y, -extrusion_length);
+			glVertex3i(v0.x, v0.y, v0.z);
+			glVertex3i(v1.x, v1.y, v1.z);
+		}
+		glEnd();
+	}
 }
 
 void draw_polygon_area(void)
@@ -656,9 +792,9 @@ void draw_polygon_area(void)
 		for (unsigned int i = 0; i < p->triangles.size(); i++)
 		{
 			Triangle *t = &(p->triangles[i]);
-			glVertex3i(t->v0.x, t->v0.y, 0);
-			glVertex3i(t->v1.x, t->v1.y, 0);
-			glVertex3i(t->v2.x, t->v2.y, 0);
+			glVertex3i(t->v0.x, t->v0.y, t->v0.z);
+			glVertex3i(t->v1.x, t->v1.y, t->v1.z);
+			glVertex3i(t->v2.x, t->v2.y, t->v2.z);
 		}
 	}
 	glEnd();
@@ -675,51 +811,15 @@ void draw_polygon_triangles(void)
 		{
 			Triangle *t = &(p->triangles[i]);
 			glBegin(GL_LINES);
-			glVertex3i(t->v0.x, t->v0.y, 0);
-			glVertex3i(t->v1.x, t->v1.y, 0);
-			glVertex3i(t->v1.x, t->v1.y, 0);
-			glVertex3i(t->v2.x, t->v2.y, 0);
-			glVertex3i(t->v2.x, t->v2.y, 0);
-			glVertex3i(t->v0.x, t->v0.y, 0);
+			glVertex3i(t->v0.x, t->v0.y, t->v0.z);
+			glVertex3i(t->v1.x, t->v1.y, t->v1.z);
+			glVertex3i(t->v1.x, t->v1.y, t->v1.z);
+			glVertex3i(t->v2.x, t->v2.y, t->v2.z);
+			glVertex3i(t->v2.x, t->v2.y, t->v2.z);
+			glVertex3i(t->v0.x, t->v0.y, t->v0.z);
 			glEnd();
 		}
 	}
-}
-
-/* 
- * Turns a vertex into a quad (rectangle) using LINE_COLOR
- */
-void vertex_to_quad(Vertex v) {
-
-}
-
-/* 
- * Extrudes all polygons to 3D
- */
-void extrude_polygons() {
-
-	cout << "In extrude_polygons...\n";
-	// for each polygon p
-	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
-	{
-		glBegin(GL_LINES);
-		for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
-		{
-			glColor3ub(COLOR_TO_RGB(p->line_clr));
-			// for each vertex v of p
-			for (unsigned int i = 0; i < p->vertices.size(); i++) 
-			{
-				cout << "vertex " << i << "(" << p->vertices[i].x << "," << p->vertices[i].y << "," << p->vertices[i].z << ")\n";
-				vertex_to_quad(p->vertices[i]); // LINE_COLOR
-			}
-		}
-		glEnd();
-		// base = triangulate_polygon(p, FILL_COLOR)
-		// top = triangulate_polygon(p, FILL_COLOR)
-	}
-	cout << "Leaving extrude_polygons...\n";
-
-
 }
 
 
