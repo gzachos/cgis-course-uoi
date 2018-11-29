@@ -39,7 +39,7 @@ using namespace std;
 
 enum color_e  {BLACK, WHITE, RED, GREEN, BLUE, YELLOW, SIENNA, ORANGE, INDIGO,
                MAGENTA, VIOLET, SILVER, ROYAL_BLUE, CYAN, CHARTREUSE, GOLD};
-enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX, MENU_CLIPPING, MENU_EXTRUDE};
+enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX, MENU_CLIPPING, MENU_EXTRUDE, MENU_EXIT3D};
 enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX, CLIPPING, EXTRUSION};
 enum clipstate_e {CLIPPING_START, CLIPPING_END};
 
@@ -74,11 +74,11 @@ class Vertex
 public:
 	GLint x;
 	GLint y;
-	GLint z = 0;
+
 	Vertex(int, int);
 	Vertex(int, int, int);
 	Vertex(const Vertex&);
-	void update(int, int, int);
+	void update(int, int);
 	Vertex operator-(Vertex v1);
 	Vertex operator+(Vertex v1);
 	Vertex operator*(float c);
@@ -92,25 +92,18 @@ public:
 
 Vertex::Vertex(int x, int y)
 {
-	update(x,y,0);
-}
-
-Vertex::Vertex(int x, int y, int z)
-{
-	update(x,y,z);
+	update(x, y);
 }
 
 Vertex::Vertex(const Vertex &v)
 {
-	update(v.x, v.y, v.z);
+	update(v.x, v.y);
 }
 
-void Vertex::update(int x, int y, int z)
+void Vertex::update(int x, int y)
 {
 	this->x = x;
 	this->y = y;
-	this->z = z;
-//	cout << "(" << x << " " << y << ") [" << x << " " << y << "]" << endl << endl;
 }
 
 Vertex Vertex::operator-(Vertex v)
@@ -177,6 +170,7 @@ Triangle::Triangle(Vertex v0, Vertex v1, Vertex v2)
 	// nothing else to do here!
 };
 
+#if 0
 inline float crossproduct(Vertex v1, Vertex v2);
 
 bool Triangle::inside_triangle(Vertex v)
@@ -186,6 +180,8 @@ bool Triangle::inside_triangle(Vertex v)
 	b = -(crossproduct(v, v1) - crossproduct(v0, v1)) / denom;
 	return (a >= 0 && b >= 0 && a+b < 1);
 }
+#endif
+
 
 class Polygon
 {
@@ -232,7 +228,7 @@ void Polygon::maxminy(int *maxp, int *minp)
 		if (vertices[i].y < min)
 			min = vertices[i].y;
 	}
-	*maxp = max; // Reduces memory accesses (dereferencig)
+	*maxp = max; // Reduces memory accesses (dereferencing)
 	*minp = min;
 }
 
@@ -309,14 +305,15 @@ void keyboard_event_handler(unsigned char key, int x, int y);
 void mouse_event_handler(int button, int state, int x, int y);
 inline void leave_current_state(void);
 void finalize(void);
-void draw_polygons(void);
+void draw_polygons_2d(void);
+void draw_polygons_3d(void);
 void draw_polygon_bounds(void);
 void draw_polygon_quads(void);
-void extrude_polygons(void);
-void draw_polygon_area(GLint z);
-void draw_polygon_triangles(void);
+void draw_polygon_area(int z);
+void draw_polygon_triangles(int z);
 void draw_clipping_polygon(void);
 void draw_grid(void);
+void extrude_polygons(void);
 inline float crossproduct(Vertex v1, Vertex v2);
 bool intersecting_polygon(Polygon *p);
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
@@ -331,16 +328,17 @@ void triangulate(Polygon *p);
 // Given Triangulation Code function prototype
 bool Process(const vector<Vertex> &contour, vector<Vertex> &result);
 
+
 /* Global Data */
-int window_id, state = NORMAL;
-int extrusion_length = 0;
+int window_id, state = NORMAL, extrusion_length = -1;
 vector<Polygon> polygons;
 color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
 bool show_triangles = false, show_clipping_polygon = false;
-
-/* In 3D, we want the original polygon to be the base of the new 3D object - we have to manipulate the axes */
-double posx=WINDOW_WIDTH + 150, posy=WINDOW_HEIGHT + 100, posz=-150, lookx=0, looky=1, lookz=0, upx=0, upy=0, upz=-1;
+double posx = WINDOW_WIDTH + 150, posy = WINDOW_HEIGHT + 100,
+       posz = -150, lookx = 0, looky = 1, lookz = 0,
+       upx = 0, upy = 0, upz = -1;
+void (*draw_polygons)(void) = draw_polygons_2d;
 
 
 int main(int argc, char **argv)
@@ -373,6 +371,7 @@ int main(int argc, char **argv)
 	glutAddMenuEntry("Move Vertex", MENU_MOVE_VERTEX);
 	glutAddMenuEntry("Clipping", MENU_CLIPPING);
 	glutAddMenuEntry("Extrude", MENU_EXTRUDE);
+	glutAddMenuEntry("Exit 3D mode", MENU_EXIT3D);
 
 	lineclr_smenuid = glutCreateMenu(&menu_handler);
 	ADD_COLOR_ENTRIES(0);
@@ -436,7 +435,7 @@ void window_display()
 		/* Enable depth */
 		glClearDepth(1.0);
 		glDepthFunc(GL_LESS);
-	  	glEnable(GL_DEPTH_TEST);
+		glEnable(GL_DEPTH_TEST);
 
 		GLfloat aspect = (GLfloat) WINDOW_WIDTH / (GLfloat) WINDOW_HEIGHT;
 		glViewport(0.0, 0.0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -451,12 +450,10 @@ void window_display()
 		glLoadIdentity();
 
 		gluLookAt(posx, posy, posz, lookx, looky, lookz, upx, upy, upz);
-		// draw_grid();
-
- 	}
+	}
 
 	draw_polygons();
-	if (show_clipping_polygon)
+	if (show_clipping_polygon /* && draw_polygons == draw_polygons_2d */)
 		draw_clipping_polygon();
 	glutSwapBuffers();
 }
@@ -479,7 +476,7 @@ void draw_grid(void)
 			glEnd();
 			glPopMatrix();
 		}
-		if (i >= 20)
+		else
 		{
 			glTranslatef(i-20, 0, 0);
 			glRotatef(-90, 0, 1, 0);
@@ -492,27 +489,24 @@ void draw_grid(void)
 			glEnd();
 			glPopMatrix();
 		}	
-
 	}
 }
 
 void draw_clipping_polygon(void)
 {
-	if (cmin && cmax)
+	if (cmin != NULL && cmax != NULL)
 	{
 		glLineWidth(2.0f);
 		glBegin(GL_LINES);
 		glColor3ub(COLOR_TO_RGB(RED));
-		glVertex3i(cmin->x, cmin->y, 0.0f);
-		glVertex3i(cmax->x, cmin->y, 0.0f);
-		glColor3ub(COLOR_TO_RGB(BLUE));
-		glVertex3i(cmax->x, cmin->y, 0.0f);
-		glVertex3i(cmax->x, cmax->y, 0.0f);
-		glColor3ub(COLOR_TO_RGB(BLACK));
-		glVertex3i(cmax->x, cmax->y, 0.0f);
-		glVertex3i(cmin->x, cmax->y, 0.0f);
-		glVertex3i(cmin->x, cmax->y, 0.0f);
-		glVertex3i(cmin->x, cmin->y, 0.0f);
+		glVertex3i(cmin->x, cmin->y, 0);
+		glVertex3i(cmax->x, cmin->y, 0);
+		glVertex3i(cmax->x, cmin->y, 0);
+		glVertex3i(cmax->x, cmax->y, 0);
+		glVertex3i(cmax->x, cmax->y, 0);
+		glVertex3i(cmin->x, cmax->y, 0);
+		glVertex3i(cmin->x, cmax->y, 0);
+		glVertex3i(cmin->x, cmin->y, 0);
 		glEnd();
 	}
 }
@@ -522,7 +516,6 @@ void resize_window(int width, int height)
 	glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);
 }
 
-
 void menu_handler(int value)
 {
 	switch (value)
@@ -531,20 +524,43 @@ void menu_handler(int value)
 			finalize();
 			break;
 		case MENU_POLYGON:
+			if (state == EXTRUSION)
+			{
+				cerr << "Cannot create a new polygon when on 3D mode." << endl;
+				break;
+			}
 			state = DRAWING_POLYGON;
 			polygons.push_back(Polygon(line_clr, fill_clr));
 			break;
 		case MENU_MOVE_VERTEX:
+			if (state == EXTRUSION)
+			{
+				cerr << "Cannot move a polygon vertex when on 3D mode." << endl;
+				break;
+			}
 			state = MOVING_VERTEX;
 			break;
 		case MENU_CLIPPING:
+			if (state == EXTRUSION)
+			{
+				cerr << "Cannot clip polygon(s) when on 3D mode." << endl;
+				break;
+			}
 			state = CLIPPING;
 			break;
 		case MENU_EXTRUDE:
 			state = EXTRUSION;
-			cout << "Please provide an extrusion length.\nA good value is in the range [50, 200] depending on the size of your polygons.\nExtrusion length: ";
+			cout << "Please provide an extrusion length." << endl << 
+				"A good value is in the range [50, 200] depending" <<
+				" on the size of your polygons." << endl << "Extrusion length: ";
 			cin >> extrusion_length; // Check for positive or something else?
 			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
+			draw_polygons = draw_polygons_3d;
+			break;
+		case MENU_EXIT3D:
+			state = NORMAL;
+			draw_polygons = draw_polygons_2d;
+			extrusion_length = -1;
 			break;
 		default:
 			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
@@ -561,43 +577,37 @@ void keyboard_event_handler(unsigned char key, int x, int y)
 		case 't':
 			show_triangles = !show_triangles;
 			break;
-		case 'P':
-		case 'p':
-			// keybind for creating polygon
-			menu_handler(MENU_POLYGON);
-			break;
 		case 'W':
 		case 'w':
 			// move camera up
-			posz+=2.0;
+			posz -= 2.0;
 			break;
 		case 'S':
 		case 's':
 			// move camera down
-			posz-=2.0;
+			posz += 2.0;
 			break;
 		case 'A':
 		case 'a':
 			// move camera left
-			posx+=2.0;
+			posx -= 2.0;
 			break;
 		case 'D':
 		case 'd':
 			// move camera right
-			posx-=2.0;
+			posx += 2.0;
 			break;
-		case 'Q':
-		case 'q':
+		case 'I':
+		case 'i':
 			// move camera in
-			posy-=2.0;
+			posy -= 2.0;
 			break;
-		case 'E':
-		case 'e':
+		case 'O':
+		case 'o':
 			// move camera out
-			posy+=2.0;
+			posy += 2.0;
 			break;
 	}
-	// cout << "x, y, z: " << posx << ' ' << posy << ' ' << posz << endl;
 }
 
 void mouse_event_handler(int button, int state, int x, int y)
@@ -647,10 +657,10 @@ void mouse_event_handler(int button, int state, int x, int y)
 			if (moving_vertex)
 			{
 				Vertex *old_vertex = new Vertex(*moving_vertex);
-				moving_vertex->update(x, y, 0);
+				moving_vertex->update(x, y);
 				if (intersecting_polygon(&(polygons[editing_polygon_index])) == true)
 				{
-					moving_vertex->update(old_vertex->x, old_vertex->y, 0);
+					moving_vertex->update(old_vertex->x, old_vertex->y);
 					cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
 				}
 				else // In case a vertex has been updated
@@ -695,7 +705,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 			{
 				cmin = new Vertex(min(v0->x,v1->x), min(v0->y, v1->y));
 				cmax = new Vertex(max(v0->x,v1->x), max(v0->y, v1->y));
-				cout << "(" << cmin->x << "," << cmin->y << ") - (" << cmax->x << "," << cmax->y << ")" << endl;
+//				cout << "(" << cmin->x << "," << cmin->y << ") - (" << cmax->x << "," << cmax->y << ")" << endl;
 				glutTimerFunc(0, timer_func, CLIPPING_START);
 				for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 				{
@@ -707,11 +717,6 @@ void mouse_event_handler(int button, int state, int x, int y)
 			leave_current_state();
 			mouse_event_count = 0;
 		}
-	}
-	else if (::state == EXTRUSION)
-	{
-		// change to 3D view
-		// leave_current_state();
 	}
 }
 
@@ -727,16 +732,26 @@ void finalize(void)
 	exit(EXIT_SUCCESS);
 }
 
-void draw_polygons(void)
+void draw_polygons_3d(void)
+{
+	draw_polygon_area(0);
+	draw_polygon_area(-extrusion_length);
+	if (show_triangles == true)
+	{
+		draw_polygon_triangles(0);
+		draw_polygon_triangles(-extrusion_length);
+	}
+
+	draw_polygon_quads();
+}
+
+void draw_polygons_2d(void)
 {
 	draw_polygon_area(0);
 	if (show_triangles == true)
-		draw_polygon_triangles();
+		draw_polygon_triangles(0);
 
-	if (state == EXTRUSION)
-		draw_polygon_quads();
-	else
-		draw_polygon_bounds();
+	draw_polygon_bounds();
 }
 
 void draw_polygon_bounds(void)
@@ -748,100 +763,80 @@ void draw_polygon_bounds(void)
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
-			glVertex3i(p->vertices[i].x, p->vertices[i].y, p->vertices[i].z);
+			glVertex3i(p->vertices[i].x, p->vertices[i].y, 0);
 			j = (i + 1) % p->vertices.size();
-			glVertex3i(p->vertices[j].x, p->vertices[j].y, p->vertices[j].z);
+			glVertex3i(p->vertices[j].x, p->vertices[j].y, 0);
 		}
 	}
 	glEnd();
 }
 
-/**
- * Extrudes the polygons to 3D
- * 
- * Draws the original polygon, a copy of the original polygon (with z = extrusion_length)
- * and draws a quad for each edge of the original polygon
- * 
- */
 void draw_polygon_quads(void)
 {
 	glLineWidth(2.0f);
 	glDepthMask(true);
-	/* For each polygon */
+
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
-		/* 
-		 * Original & copy (base & top) 
-		 */
+#if 0
 		glBegin(GL_LINES);
 		glColor3ub(COLOR_TO_RGB(p->fill_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
 			j = (i + 1) % p->vertices.size();
-
-			Vertex v0 = p->vertices[i];
-			Vertex v1 = p->vertices[j];
+			Vertex *v0 = &(p->vertices[i]);
+			Vertex *v1 = &(p->vertices[j]);
 
 			/* Base */
-			glVertex3i(v0.x, v0.y, v0.z);
-			glVertex3i(v1.x, v1.y, v1.z);
+			glVertex3i(v0->x, v0->y, 0);
+			glVertex3i(v1->x, v1->y, 0);
 
 			/* Top */
-			glVertex3i(v0.x, v0.y, v0.z - extrusion_length);
-			glVertex3i(v1.x, v1.y, v0.z - extrusion_length);
-			// draw the area too
-			draw_polygon_area(v0.z - extrusion_length);
+			glVertex3i(v0->x, v0->y, -extrusion_length);
+			glVertex3i(v1->x, v1->y, -extrusion_length);
 		}
 		glEnd();
+#endif
 
-		/* 
-		 * Sides 
-		 */
-		// glBegin(GL_QUADS);
-		// glColor3ub(COLOR_TO_RGB(p->line_clr));
-		// for (unsigned int i = 0, j; i < p->vertices.size(); i++)
-		// {
-		// 	j = (i + 1) % p->vertices.size();
+#if 1
+		glBegin(GL_QUADS);
+		glColor3ub(COLOR_TO_RGB(p->line_clr));
+		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		{
+			Vertex *v0 = &(p->vertices[i]);
+			j = (i + 1) % p->vertices.size();
+			Vertex *v1 = &(p->vertices[j]);
 
-		// 	Vertex v0 = p->vertices[i];
-		// 	Vertex v1 = p->vertices[j];
-
-		// 	glVertex3i(v0.x, v0.y, v0.z - extrusion_length);
-		// 	glVertex3i(v1.x, v1.y, v1.z - extrusion_length);
-		// 	glVertex3i(v0.x, v0.y, v0.z);
-		// 	glVertex3i(v1.x, v1.y, v1.z);
-
-		// 	// instead of drawing it as a quad, maybe:
-		// 	// triangulate quad
-		// 	// draw_quad_area(fill color)
-		// }
-		// glEnd();
-
+			glVertex3i(v0->x, v0->y, -extrusion_length);
+			glVertex3i(v1->x, v1->y, -extrusion_length);
+			glVertex3i(v1->x, v1->y, 0);
+			glVertex3i(v0->x, v0->y, 0);
+		}
+		glEnd();
+#else
 		glBegin(GL_TRIANGLES);
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
 			j = (i + 1) % p->vertices.size();
-
-			Vertex v0 = p->vertices[i];
-			Vertex v1 = p->vertices[j];
+			Vertex *v0 = &(p->vertices[i]);
+			Vertex *v1 = &(p->vertices[j]);
 
 			/* triangle 1 */
-			glVertex3i(v0.x, v0.y, v0.z - extrusion_length);
-			glVertex3i(v1.x, v1.y, v1.z - extrusion_length);
-			glVertex3i(v0.x, v0.y, v0.z);
+			glVertex3i(v0->x, v0->y, -extrusion_length);
+			glVertex3i(v1->x, v1->y, -extrusion_length);
+			glVertex3i(v0->x, v0->y, 0);
 			/* triangle 2 */
-			glVertex3i(v0.x, v0.y, v0.z);
-			glVertex3i(v1.x, v1.y, v1.z - extrusion_length);
-			glVertex3i(v1.x, v1.y, v1.z);
+			glVertex3i(v0->x, v0->y, 0);
+			glVertex3i(v1->x, v1->y, -extrusion_length);
+			glVertex3i(v1->x, v1->y, 0);
 		}
 		glEnd();
-
-
+#endif
 	}
 }
 
-void draw_polygon_area(GLint z)
+void draw_polygon_area(int z)
 {
 	glLineWidth(1.0f);
 	glBegin(GL_TRIANGLES);
@@ -859,8 +854,7 @@ void draw_polygon_area(GLint z)
 	glEnd();
 }
 
-
-void draw_polygon_triangles(void)
+void draw_polygon_triangles(int z)
 {
 	glLineWidth(2.0f);
 	glColor3ub(COLOR_TO_RGB(GREEN));
@@ -870,17 +864,16 @@ void draw_polygon_triangles(void)
 		{
 			Triangle *t = &(p->triangles[i]);
 			glBegin(GL_LINES);
-			glVertex3i(t->v0.x, t->v0.y, t->v0.z);
-			glVertex3i(t->v1.x, t->v1.y, t->v1.z);
-			glVertex3i(t->v1.x, t->v1.y, t->v1.z);
-			glVertex3i(t->v2.x, t->v2.y, t->v2.z);
-			glVertex3i(t->v2.x, t->v2.y, t->v2.z);
-			glVertex3i(t->v0.x, t->v0.y, t->v0.z);
+			glVertex3i(t->v0.x, t->v0.y, z);
+			glVertex3i(t->v1.x, t->v1.y, z);
+			glVertex3i(t->v1.x, t->v1.y, z);
+			glVertex3i(t->v2.x, t->v2.y, z);
+			glVertex3i(t->v2.x, t->v2.y, z);
+			glVertex3i(t->v0.x, t->v0.y, z);
 			glEnd();
 		}
 	}
 }
-
 
 /*
  * Checks if two vectors (AB and CD) intersect.
@@ -1026,7 +1019,7 @@ void sh_clip(Polygon *p)
 			s = e;
 		}
 	}
-#if 1
+#if 0
 	for (unsigned int i = 0; i < output_list.size(); i++)
 	{
 		if (i == 0)
@@ -1055,7 +1048,6 @@ bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2)
 	}
 	return false;
 }
-
 
 void triangulate(Polygon *p)
 {
