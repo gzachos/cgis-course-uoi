@@ -343,7 +343,6 @@ bool show_triangles = false, show_clipping_polygon = false;
 double posx = WINDOW_WIDTH + 150, posy = WINDOW_HEIGHT + 100,
        posz = -150, lookx = 0, looky = 1, lookz = 0,
        upx = 0, upy = 0, upz = -1;
-void (*draw_polygon_contour)(void) = draw_polygon_bounds;
 
 
 int main(int argc, char **argv)
@@ -573,11 +572,9 @@ void menu_handler(int value)
 			for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 				p->extrusion_length = extrusion_length;
 #endif
-			draw_polygon_contour = draw_polygon_quads;
 			break;
 		case MENU_EXIT3D:
 			state = NORMAL;
-			draw_polygon_contour = draw_polygon_bounds;
 			break;
 		default:
 			if (value >= BLACK && value < BLACK + NUM_OF_COLORS)
@@ -755,7 +752,9 @@ void draw_polygons(void)
 	if (show_triangles == true)
 		draw_polygon_triangles();
 
-	draw_polygon_contour();
+	if (::state == EXTRUSION)
+		draw_polygon_quads();
+	draw_polygon_bounds();
 }
 
 void draw_polygon_bounds(void)
@@ -769,6 +768,8 @@ void draw_polygon_bounds(void)
 		{
 			j = (i + 1) % p->vertices.size();
 			glLine3i(p->vertices[i], p->vertices[j], 0);
+			if (::state == EXTRUSION)
+				glLine3i(p->vertices[i], p->vertices[j], -(p->extrusion_length));
 		}
 	}
 	glEnd();
