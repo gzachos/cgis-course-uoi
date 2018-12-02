@@ -12,6 +12,8 @@ A repository for the Computer Graphics and Interaction Systems course projects.
  - [x] <del>Polygon triangulation</del> [__5%__]
  - [x] <del>Polygon coloring (edges + fill)</del> [__5%__]
  - [ ] Polygon clipping using the Hodgeman-Sutherland algorithm [__35%__]
+	- [x] <del>Clip the polygons</del>
+	- [ ] Remove the connecting edge
  - [x] <del>Extrusion in 3D</del> [__40%__]
 
 __Bonus__ _(requires 50% of the basic requirements completed)_

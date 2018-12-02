@@ -4,9 +4,9 @@ CXX = g++
 CPPFLAGS = -g -Wall
 LDLIBS = -lGL -lGLU -lglut
 
-var-extrusion-length:
-	$(CXX) $(CPPFLAGS) -DVARIABLE_EXTRUSION_LENGTH project1.cpp $(LDLIBS)
-
 const-extrusion-length:
 	$(CXX) $(CPPFLAGS) -UVARIABLE_EXTRUSION_LENGTH project1.cpp $(LDLIBS)
+
+var-extrusion-length:
+	$(CXX) $(CPPFLAGS) -DVARIABLE_EXTRUSION_LENGTH project1.cpp $(LDLIBS)
 
