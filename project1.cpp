@@ -912,18 +912,24 @@ void draw_polygon_triangles()
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
+		int z1 = 1, z2 = -1;
+		if (p->extrusion_length < 0)
+		{
+			z1 = -1;
+			z2 = 1;
+		}
 		for (unsigned int i = 0; i < p->triangles.size(); i++)
 		{
 			Triangle *t = &(p->triangles[i]);
-			glLine3i(t->v0, t->v1, 1);
-			glLine3i(t->v1, t->v2, 1);
-			glLine3i(t->v2, t->v0, 1);
+			glLine3i(t->v0, t->v1, z1);
+			glLine3i(t->v1, t->v2, z1);
+			glLine3i(t->v2, t->v0, z1);
 
 			if (::state == EXTRUSION)
 			{
-				glLine3i(t->v0, t->v1, -(p->extrusion_length)-1);
-				glLine3i(t->v1, t->v2, -(p->extrusion_length)-1);
-				glLine3i(t->v2, t->v0, -(p->extrusion_length)-1);
+				glLine3i(t->v0, t->v1, -(p->extrusion_length) + z2);
+				glLine3i(t->v1, t->v2, -(p->extrusion_length) + z2);
+				glLine3i(t->v2, t->v0, -(p->extrusion_length) + z2);
 			}
 		}
 	}
