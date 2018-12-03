@@ -893,7 +893,7 @@ void draw_polygon_area()
 
 void draw_polygon_triangles()
 {
-	glLineWidth(2.0f);
+	glLineWidth(1.5f);
 	glColor3ub(COLOR_TO_RGB(GREEN));
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
@@ -901,15 +901,15 @@ void draw_polygon_triangles()
 		for (unsigned int i = 0; i < p->triangles.size(); i++)
 		{
 			Triangle *t = &(p->triangles[i]);
-			glLine3i(t->v0, t->v1, 0);
-			glLine3i(t->v1, t->v2, 0);
-			glLine3i(t->v2, t->v0, 0);
+			glLine3i(t->v0, t->v1, 1);
+			glLine3i(t->v1, t->v2, 1);
+			glLine3i(t->v2, t->v0, 1);
 
 			if (::state == EXTRUSION)
 			{
-				glLine3i(t->v0, t->v1, -(p->extrusion_length));
-				glLine3i(t->v1, t->v2, -(p->extrusion_length));
-				glLine3i(t->v2, t->v0, -(p->extrusion_length));
+				glLine3i(t->v0, t->v1, -(p->extrusion_length)-1);
+				glLine3i(t->v1, t->v2, -(p->extrusion_length)-1);
+				glLine3i(t->v2, t->v0, -(p->extrusion_length)-1);
 			}
 		}
 	}
