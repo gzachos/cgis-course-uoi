@@ -200,6 +200,7 @@ public:
 	int extrusion_length;
 
 	Polygon(color_e, color_e);
+	bool operator==(const Polygon rhs);
 	Vertex *contains(Vertex v);
 #if 0
 	void maxminy(int *maxp, int *minp);
@@ -213,6 +214,19 @@ Polygon::Polygon(color_e line, color_e fill)
 	line_clr = line;
 	fill_clr = fill;
 }
+
+bool Polygon::operator==(const Polygon rhs)
+{
+	if (this->vertices.size() != rhs.vertices.size())
+		return false;
+	for (unsigned int i = 0; i < this->vertices.size(); i++)
+		if (this->vertices[i] != rhs.vertices[i])
+			return false;
+	return this->fill_clr == rhs.fill_clr &&
+		this->line_clr == rhs.line_clr &&
+		this->extrusion_length == rhs.extrusion_length;
+}
+
 
 Vertex *Polygon::contains(Vertex v)
 {
@@ -799,7 +813,7 @@ void draw_polygon_bounds(void)
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
 #ifndef DRAW_LAST_EDGE_SINCE_START
-			if (::state == DRAWING_POLYGON && i == p->vertices.size()-1)
+			if (::state == DRAWING_POLYGON && *p == polygons.back() && i == p->vertices.size()-1)
 				continue;
 #endif
 			j = (i + 1) % p->vertices.size();
@@ -871,14 +885,14 @@ inline void glLine3i(Vertex v0, Vertex v1, int z)
 
 void draw_polygon_area()
 {
-#ifndef DRAW_LAST_EDGE_SINCE_START
-	if (::state == DRAWING_POLYGON)
-		return;
-#endif
 	glLineWidth(1.0f);
 	glBegin(GL_TRIANGLES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
+#ifndef DRAW_LAST_EDGE_SINCE_START
+		if (::state == DRAWING_POLYGON && *p == polygons.back())
+			continue;
+#endif
 		glColor3ub(COLOR_TO_RGB(p->fill_clr));
 		for (unsigned int i = 0; i < p->triangles.size(); i++)
 		{
@@ -893,7 +907,7 @@ void draw_polygon_area()
 
 void draw_polygon_triangles()
 {
-	glLineWidth(1.5f);
+	glLineWidth(2.0f);
 	glColor3ub(COLOR_TO_RGB(GREEN));
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
