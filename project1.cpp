@@ -8,7 +8,7 @@
 
 using namespace std;
 
-#if 1
+#if 0
 	#define DRAW_LAST_EDGE_SINCE_START
 #else
 	#undef DRAW_LAST_EDGE_SINCE_START
@@ -455,7 +455,7 @@ void window_display()
 		/* Camera perspective */
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
-		gluPerspective(60, aspect, 1.0, 1000.0);
+		gluPerspective(60, aspect, 1.0, 2000.0);
 
 		/* Model view */
 		glMatrixMode(GL_MODELVIEW);
