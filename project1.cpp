@@ -8,7 +8,11 @@
 
 using namespace std;
 
-// #define VARIABLE_EXTRUSION_LENGTH
+#if 1
+	#define DRAW_LAST_EDGE_SINCE_START
+#else
+	#undef DRAW_LAST_EDGE_SINCE_START
+#endif
 
 /* Global Definitions */
 #define WINDOW_WIDTH		600
@@ -320,7 +324,11 @@ void draw_polygon_triangles(void);
 void draw_clipping_polygon(void);
 void draw_grid(void);
 inline float crossproduct(Vertex v1, Vertex v2);
+#ifdef DRAW_LAST_EDGE_SINCE_START
 bool intersecting_polygon(Polygon *p);
+#else
+bool intersecting_polygon(Polygon *p, bool ignore_last_edge);
+#endif
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
 #if 0
 bool sort_by_x(Vertex v0, Vertex v1);
@@ -639,7 +647,11 @@ void mouse_event_handler(int button, int state, int x, int y)
 		{
 			polygons.back().vertices.push_back(Vertex(x, y));
 			triangulate(&(polygons.back())); // To allow area coloring
+#ifdef DRAW_LAST_EDGE_SINCE_START
 			if (intersecting_polygon(&polygons.back()) == true)
+#else
+			if (intersecting_polygon(&polygons.back(), true) == true)
+#endif
 			{
 				cerr << "You created an intersecting polygon." <<
 					" Nothing to be saved!" << endl;
@@ -651,11 +663,27 @@ void mouse_event_handler(int button, int state, int x, int y)
 		if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
 		{
 			leave_current_state();
+#ifndef DRAW_LAST_EDGE_SINCE_START
+			bool removed_polygon = false;
+			if (intersecting_polygon(&polygons.back(), false) == true)
+			{
+				cerr << "You created an intersecting polygon." <<
+					" Nothing to be saved!" << endl;
+				polygons.pop_back();
+				removed_polygon = true;
+			}
+#endif
 			if (created_polygon == true && polygons.back().vertices.size() < MIN_VERTEX_NUM)
 			{
-				polygons.pop_back();
+
 				cerr << "At least " << MIN_VERTEX_NUM << " vertices are required to" <<
 					" create a polygon. Nothing to be saved!" << endl;
+#ifndef DRAW_LAST_EDGE_SINCE_START
+				if (removed_polygon == false)
+#endif
+				{
+					polygons.pop_back();
+				}
 			}
 			created_polygon = false;
 		}
@@ -672,7 +700,11 @@ void mouse_event_handler(int button, int state, int x, int y)
 			{
 				Vertex *old_vertex = new Vertex(*moving_vertex);
 				moving_vertex->update(x, y);
+#ifdef DRAW_LAST_EDGE_SINCE_START
 				if (intersecting_polygon(&(polygons[editing_polygon_index])) == true)
+#else
+				if (intersecting_polygon(&(polygons[editing_polygon_index]), false) == true)
+#endif
 				{
 					moving_vertex->update(old_vertex->x, old_vertex->y);
 					cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
@@ -835,6 +867,10 @@ inline void glLine3i(Vertex v0, Vertex v1, int z)
 
 void draw_polygon_area()
 {
+#ifndef DRAW_LAST_EDGE_SINCE_START
+	if (::state == DRAWING_POLYGON)
+		return;
+#endif
 	glLineWidth(1.0f);
 	glBegin(GL_TRIANGLES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
@@ -919,7 +955,11 @@ inline float crossproduct(Vertex v1, Vertex v2)
 	return ((v2.y * v1.x) - (v2.x * v1.y));
 }
 
+#ifdef DRAW_LAST_EDGE_SINCE_START
 bool intersecting_polygon(Polygon *p)
+#else
+bool intersecting_polygon(Polygon *p, bool ignore_last_edge)
+#endif
 {
 	unsigned int i, j;
 	unsigned int vnum = p->vertices.size();
@@ -931,6 +971,10 @@ bool intersecting_polygon(Polygon *p)
 	{
 		for (j = i+1; j < vnum; j++)
 		{
+#ifndef DRAW_LAST_EDGE_SINCE_START
+			if (ignore_last_edge && (i == vnum-1 || j == vnum-1))
+				continue;
+#endif
 			if (intersection(&(p->vertices[i]),
 						&(p->vertices[i+1]),
 						&(p->vertices[j]),
