@@ -798,6 +798,10 @@ void draw_polygon_bounds(void)
 		glColor3ub(COLOR_TO_RGB(p->line_clr));
 		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
 		{
+#ifndef DRAW_LAST_EDGE_SINCE_START
+			if (::state == DRAWING_POLYGON && i == p->vertices.size()-1)
+				continue;
+#endif
 			j = (i + 1) % p->vertices.size();
 			glLine3i(p->vertices[i], p->vertices[j], 0);
 			if (::state == EXTRUSION)
