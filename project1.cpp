@@ -177,19 +177,6 @@ Triangle::Triangle(Vertex v0, Vertex v1, Vertex v2)
 	// nothing else to do here!
 };
 
-#if 0
-inline float crossproduct(Vertex v1, Vertex v2);
-
-bool Triangle::inside_triangle(Vertex v)
-{
-	float a, b, denom = crossproduct(v1, v2);
-	a = (crossproduct(v, v2) - crossproduct(v0, v2)) / denom;
-	b = -(crossproduct(v, v1) - crossproduct(v0, v1)) / denom;
-	return (a >= 0 && b >= 0 && a+b < 1);
-}
-#endif
-
-
 class Polygon
 {
 public:
@@ -202,11 +189,6 @@ public:
 	Polygon(color_e, color_e);
 	bool operator==(const Polygon rhs);
 	Vertex *contains(Vertex v);
-#if 0
-	void maxminy(int *maxp, int *minp);
-	vector<Vertex> get_intersection_points(Vertex v0, Vertex v1);
-	vector<Vertex> get_intersection_points_cleanedup(Vertex v0, Vertex v1);
-#endif
 };
 
 Polygon::Polygon(color_e line, color_e fill)
@@ -240,85 +222,6 @@ Vertex *Polygon::contains(Vertex v)
 	return NULL;
 }
 
-#if 0
-void Polygon::maxminy(int *maxp, int *minp)
-{
-	int min, max;
-	min = max = vertices[0].y;
-	for (unsigned int i = 1; i < vertices.size(); i++)
-	{
-		if (vertices[i].y > max)
-			max = vertices[i].y;
-		if (vertices[i].y < min)
-			min = vertices[i].y;
-	}
-	*maxp = max; // Reduces memory accesses (dereferencing)
-	*minp = min;
-}
-
-vector<Vertex> Polygon::get_intersection_points(Vertex v1, Vertex v2)
-{
-	vector<Vertex> points;
-	unsigned int vnum = vertices.size();
-	Vertex *ipp;
-
-	// Function prototype is required here too
-	Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
-
-	for (unsigned int i = 0; i < vnum; i++)
-	{
-		/*
-		 * Intersection points of collinear edges are ignored
-		 */
-		ipp = intersection(&v1, &v2, &(vertices[i]), &(vertices[(i+1) % vnum]), false);
-		/*
-		 * Each intersection point that is also a polygon vertex
-		 * is added twice in the points list.
-		 */
-		if (ipp != NULL)
-			points.push_back(*ipp);
-	}
-	return points;
-}
-
-vector<Vertex> Polygon::get_intersection_points_cleanedup(Vertex v0, Vertex v1)
-{
-	bool sort_by_x(Vertex v0, Vertex v1);
-	vector<Vertex> points = get_intersection_points(v0, v1);
-	Vertex *curr_vp, *prev_vp, *next_vp;
-	unsigned int vnum = vertices.size(), currindex;
-
-	sort(points.begin(), points.end(), sort_by_x);
-
-	/*
-	 * At this point of time we have to sort all points and
-	 * remove double entries as required by the scanline filling
-	 * algorithm.
-	 */
-	for (vector<Vertex>::iterator pi = points.begin(); pi < points.end(); pi++)
-	{
-		if ((curr_vp = contains(*pi)) != NULL)
-		{
-			currindex = curr_vp - &(vertices[0]);
-			prev_vp = &(vertices[(currindex == 0) ? (vnum-1) : (currindex-1)]);
-			next_vp = &(vertices[(currindex+1) % vnum]);
-			/*
-			 * If the two edges that meet in (pi->x, pi->y) are both
-			 * above or below the line y = v0.y = v1.y then (pi->x, pi->y)
-			 * should be (and actually are) twice in the points list.
-			 * In the opposite case, we should remove the second Vertex instance.
-			 */
-			if (!((prev_vp->y > curr_vp->y && next_vp->y > curr_vp->y) ||
-					(prev_vp->y < curr_vp->y && next_vp->y < curr_vp->y))) // Equality?
-			{
-				points.erase(pi++);
-			}
-		}
-	}
-	return points;
-}
-
-#endif
 
 /* Function Prototypes */
 void window_display(void);
@@ -344,10 +247,6 @@ bool intersecting_polygon(Polygon *p);
 bool intersecting_polygon(Polygon *p, bool ignore_last_edge);
 #endif
 Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore_edge_points);
-#if 0
-bool sort_by_x(Vertex v0, Vertex v1);
-bool sort_by_y(Vertex v0, Vertex v1);
-#endif
 void sh_clip(Polygon *p);
 bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2);
 void triangulate(Polygon *p);
@@ -410,22 +309,9 @@ int main(int argc, char **argv)
 	glutAddSubMenu("FILL_COLOR", fillclr_smenuid);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 
-#if 0
-	// For checking intersection(...);
-//	Vertex v1(0,0), v2(600,500), v3(0,500), v4(600,0);
-//	Vertex v1(0,0), v2(600,500), v3(600,0), v4(0,500);
-	Vertex v1(0,250), v2(600,250), v3(50,250), v4(100,251); // Vertical line segments
-//	Vertex v1(0,0), v2(600,500), v3(300,0), v4(600,250); // Parallel line segments
-//	Vertex v1(0,0), v2(600,500), v4(300,0), v3(600,250); // Parallel line segments
-	if (intersection(&v1, &v2, &v3, &v4, false) != NULL)\
-		cout << "INTERSECTS"<< endl;
-	else
-		cout << "DOESN'T"<< endl;
-#else
 	// Enter the GLUT event processing loop.
 	// This function should never return.
 	glutMainLoop();
-#endif
 
 	return (EXIT_FAILURE);
 }
@@ -962,12 +848,6 @@ Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore
 	{
 		if (ignore_edge_points && (l == 0 || l == 1 || k == 0 || k == 1))
 			return NULL;
-#if 0
-		cout << "p1: " << p1 <<"p2: " << p2 << "p3: " <<p3 <<"p4: " << p4 << endl;
-		cout << "l: " << l << " k: "<< k << " denom: " << denom << endl;
-		cout << p1 + ((p2-p1)*l) << endl;
-		cout << p3 + (p4-p3)*k;
-#endif
 		return new Vertex(p1 + (p2-p1)*l);
 	}
 
@@ -1014,17 +894,6 @@ bool intersecting_polygon(Polygon *p, bool ignore_last_edge)
 	return false;
 }
 
-#if 0
-bool sort_by_x(Vertex v0, Vertex v1)
-{
-	return (v0.x < v1.x);
-}
-
-bool sort_by_y(Vertex v0, Vertex v1)
-{
-	return (v0.y < v1.y);
-}
-#endif
 
 void sh_clip(Polygon *p)
 {
@@ -1088,14 +957,6 @@ void sh_clip(Polygon *p)
 			s = e;
 		}
 	}
-#if 0
-	for (unsigned int i = 0; i < output_list.size(); i++)
-	{
-		if (i == 0)
-			cout << "CLIP: " << endl;
-		cout << output_list[i];
-	}
-#endif
 	p->vertices = output_list;
 }
 
