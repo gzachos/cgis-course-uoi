@@ -382,6 +382,8 @@ int main(int argc, char **argv)
 	return (EXIT_FAILURE);
 }
 
+// Used to display the clipping polygon for SHOW_CLIP_POLY_MILLIS milliseconds
+// after selection.
 void timer_func(int value)
 {
 	show_clipping_polygon = (value == 0);
@@ -598,11 +600,14 @@ void mouse_event_handler(int button, int state, int x, int y)
 		   editing_polygon_index = -1;
 	static Vertex *moving_vertex = NULL,
 		      *v0 = NULL, *v1 = NULL;
-
 	static bool created_polygon = false;
+
+	// A polygon is currently being drawn.
 	if (::state == DRAWING_POLYGON)
 	{
 		glutDetachMenu(GLUT_RIGHT_BUTTON);
+		// Add another polygon vertex and in case a self-intersecting
+		// polygon occured, the polygon it is removed.
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
 		{
 			polygons.back().get_vertices().push_back(Vertex(x, y));
@@ -620,6 +625,8 @@ void mouse_event_handler(int button, int state, int x, int y)
 			}
 			created_polygon = true;
 		}
+		// Stop polygon drawing, check for a minumum number of vertices and
+		// for self-intersection. Remove polygon if requirements are not met.
 		if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
 		{
 			leave_current_state();
@@ -648,6 +655,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 			created_polygon = false;
 		}
 	}
+	// Move a vertex to a new position.
 	else if (::state == MOVING_VERTEX)
 	{
 		glutDetachMenu(GLUT_RIGHT_BUTTON);
@@ -656,7 +664,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 
 		if (state == GLUT_UP)
 		{
-			if (moving_vertex)
+			if (moving_vertex != NULL) // A vertex has been selected
 			{
 				Vertex *old_vertex = new Vertex(*moving_vertex);
 				moving_vertex->update(x, y);
@@ -679,6 +687,8 @@ void mouse_event_handler(int button, int state, int x, int y)
 			return;
 		}
 
+		// Find the vertex, if it exists, that lies near to the window point the
+		// user has left (down) clicked.
 		for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 			for (unsigned int i = 0; i < p->get_vertices().size(); i++)
 			{
@@ -689,6 +699,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 				}
 			}
 	}
+	// Polygon clipping using the Sutherland–Hodgman algorithm.
 	else if (::state == CLIPPING)
 	{
 		glutDetachMenu(GLUT_RIGHT_BUTTON);
@@ -711,11 +722,11 @@ void mouse_event_handler(int button, int state, int x, int y)
 			{
 				cmin = new Vertex(min(v0->get_x(),v1->get_x()), min(v0->get_y(), v1->get_y()));
 				cmax = new Vertex(max(v0->get_x(),v1->get_x()), max(v0->get_y(), v1->get_y()));
-				glutTimerFunc(0, timer_func, CLIPPING_START);
+				glutTimerFunc(0, timer_func, CLIPPING_START); // Display clipping polygon
+				// Clip and triangulate each polygon.
 				for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 				{
 					sh_clip(&(*p));
-					// Triangulate each polygon after clipping
 					triangulate(&(*p));
 				}
 			}
@@ -876,7 +887,6 @@ Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore
 	       p3 = *v3,
 	       p4 = *v4;
 
-//	cout << "Ap1: " << p1 <<"Ap2: " << p2 << "Ap3: " <<p3 <<"Ap4: " << p4 << endl;
 	denom = crossproduct(p2-p1, p4-p3);
 
 	l = crossproduct(p3-p1, p4-p3) /  denom;
@@ -897,6 +907,7 @@ inline float crossproduct(Vertex v1, Vertex v2)
 	return ((v2.get_y() * v1.get_x()) - (v2.get_x() * v1.get_y()));
 }
 
+// Checks for a self-intersecting polygon.
 #ifdef DRAW_LAST_EDGE_SINCE_START
 bool intersecting_polygon(Polygon *p)
 #else
@@ -929,13 +940,13 @@ bool intersecting_polygon(Polygon *p, bool ignore_last_edge)
 	return false;
 }
 
-
+// Implementation of the Sutherland–Hodgman clipping algorithm.
 void sh_clip(Polygon *p)
 {
 	if (cmin == NULL || cmax == NULL || p == NULL)
 		return;
 
-	// Clipping polygon
+	// The clipping polygon
 	Vertex cp[8] = {
 		Vertex(0, cmin->get_y()),
 		Vertex(WINDOW_WIDTH, cmin->get_y()),
@@ -993,6 +1004,9 @@ void sh_clip(Polygon *p)
 	p->get_vertices() = output_list;
 }
 
+// Checks whether a point (p) lies on the left of the clipping polygon's edge.
+// If true, the point lies inside the clipping polygon as the later is defined
+// in a counter-clockwise manner.
 bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2)
 {
 	if (cp1.get_x() == cp2.get_x())
