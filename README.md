@@ -1,4 +1,4 @@
-# cgis-opengl-uoi
+# cgis-course-uoi
 
 A repository for the OpenGL project of the Computer Graphics and Interaction Systems course.
 
