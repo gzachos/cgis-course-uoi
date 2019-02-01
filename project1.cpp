@@ -45,17 +45,16 @@ using namespace std;
 
 enum color_e  {BLACK, WHITE, RED, GREEN, BLUE, YELLOW, SIENNA, ORANGE, INDIGO,
                MAGENTA, VIOLET, SILVER, ROYAL_BLUE, CYAN, CHARTREUSE, GOLD};
-enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX, MENU_CLIPPING, MENU_EXTRUDE, MENU_EXIT3D};
+enum option_e {MENU_EXIT = 2*NUM_OF_COLORS, MENU_POLYGON, MENU_MOVE_VERTEX,
+		MENU_CLIPPING, MENU_EXTRUDE, MENU_EXIT3D};
 enum state_e  {NORMAL, DRAWING_POLYGON, MOVING_VERTEX, CLIPPING, EXTRUSION};
 enum clipstate_e {CLIPPING_START, CLIPPING_END};
 
-typedef struct color_s
-{
+typedef struct color_s {
 	GLubyte r;
 	GLubyte g;
 	GLubyte b;
 } color_t;
-
 
 color_t color[NUM_OF_COLORS] = {{0x00, 0x00, 0x00},  // BLACK
                                 {0xff, 0xff, 0xff},  // WHITE
@@ -77,13 +76,15 @@ color_t color[NUM_OF_COLORS] = {{0x00, 0x00, 0x00},  // BLACK
 /* Class definitions */
 class Vertex
 {
-public:
+private:
 	GLint x;
 	GLint y;
-
+public:
 	Vertex(int, int);
 	Vertex(int, int, int);
 	Vertex(const Vertex&);
+	const GLint& get_x() const;
+	const GLint& get_y() const;
 	void update(int, int);
 	Vertex operator-(Vertex v1);
 	Vertex operator+(Vertex v1);
@@ -110,6 +111,16 @@ void Vertex::update(int x, int y)
 {
 	this->x = x;
 	this->y = y;
+}
+
+const GLint& Vertex::get_x() const
+{
+	return x;
+}
+
+const GLint& Vertex::get_y() const
+{
+	return y;
 }
 
 Vertex Vertex::operator-(Vertex v)
@@ -160,15 +171,18 @@ bool Vertex::in_x_range(int x, int y, int threshold)
 	return (DISTANCE(this->x, x) <= threshold && this->y == y);
 }
 
+
 class Triangle
 {
-public:
+private:
 	Vertex v0;
 	Vertex v1;
 	Vertex v2;
-
+public:
 	Triangle(Vertex v0, Vertex v1, Vertex v2);
-	bool inside_triangle(Vertex v);
+	const Vertex& get_v0() const;
+	const Vertex& get_v1() const;
+	const Vertex& get_v2() const;
 };
 
 Triangle::Triangle(Vertex v0, Vertex v1, Vertex v2)
@@ -177,16 +191,38 @@ Triangle::Triangle(Vertex v0, Vertex v1, Vertex v2)
 	// nothing else to do here!
 };
 
+const Vertex& Triangle::get_v0() const
+{
+	return v0;
+}
+
+const Vertex& Triangle::get_v1() const
+{
+	return v1;
+}
+
+const Vertex& Triangle::get_v2() const
+{
+	return v2;
+}
+
+
 class Polygon
 {
-public:
+private:
 	vector<Vertex> vertices;
 	vector<Triangle> triangles;
 	color_e line_clr;
 	color_e fill_clr;
 	int extrusion_length;
-
+public:
 	Polygon(color_e, color_e);
+	vector<Vertex>& get_vertices();
+	vector<Triangle>& get_triangles();
+	const color_e& get_line_clr() const;
+	const color_e& get_fill_clr() const;
+	const int& get_extrusion_length() const;
+	void set_extrusion_length(int extrusion_length);
 	bool operator==(const Polygon rhs);
 	Vertex *contains(Vertex v);
 };
@@ -195,6 +231,36 @@ Polygon::Polygon(color_e line, color_e fill)
 {
 	line_clr = line;
 	fill_clr = fill;
+}
+
+vector<Vertex>& Polygon::get_vertices()
+{
+	return vertices;
+}
+
+vector<Triangle>& Polygon::get_triangles()
+{
+	return triangles;
+}
+
+const color_e& Polygon::get_line_clr() const
+{
+	return line_clr;
+}
+
+const color_e& Polygon::get_fill_clr() const
+{
+	return fill_clr;
+}
+
+const int& Polygon::get_extrusion_length() const
+{
+	return extrusion_length;
+}
+
+void Polygon::set_extrusion_length(int extrusion_length)
+{
+	this->extrusion_length = extrusion_length;
 }
 
 bool Polygon::operator==(const Polygon rhs)
@@ -209,7 +275,6 @@ bool Polygon::operator==(const Polygon rhs)
 		this->extrusion_length == rhs.extrusion_length;
 }
 
-
 Vertex *Polygon::contains(Vertex v)
 {
 	unsigned int i;
@@ -217,7 +282,7 @@ Vertex *Polygon::contains(Vertex v)
 		if (vertices[i] == v)
 			return &(vertices[i]);
 	for (i = 0; i < vertices.size(); i++)
-		if (vertices[i].in_x_range(v.x, v.y, 3))
+		if (vertices[i].in_x_range(v.get_x(), v.get_y(), 3))
 			return &(vertices[i]);
 	return NULL;
 }
@@ -261,6 +326,7 @@ vector<Polygon> polygons;
 color_e line_clr = BLACK, fill_clr = WHITE;
 Vertex *cmin, *cmax;
 bool show_triangles = false, show_clipping_polygon = false;
+// Extrusion-related data
 double posx = WINDOW_WIDTH + 150, posy = WINDOW_HEIGHT + 100,
        posz = -150, lookx = 0, looky = 1, lookz = 0,
        upx = 0, upy = 0, upz = -1;
@@ -411,14 +477,14 @@ void draw_clipping_polygon(void)
 		glLineWidth(2.0f);
 		glBegin(GL_LINES);
 		glColor3ub(COLOR_TO_RGB(RED));
-		glVertex3i(cmin->x, cmin->y, 0);
-		glVertex3i(cmax->x, cmin->y, 0);
-		glVertex3i(cmax->x, cmin->y, 0);
-		glVertex3i(cmax->x, cmax->y, 0);
-		glVertex3i(cmax->x, cmax->y, 0);
-		glVertex3i(cmin->x, cmax->y, 0);
-		glVertex3i(cmin->x, cmax->y, 0);
-		glVertex3i(cmin->x, cmin->y, 0);
+		glVertex3i(cmin->get_x(), cmin->get_y(), 0);
+		glVertex3i(cmax->get_x(), cmin->get_y(), 0);
+		glVertex3i(cmax->get_x(), cmin->get_y(), 0);
+		glVertex3i(cmax->get_x(), cmax->get_y(), 0);
+		glVertex3i(cmax->get_x(), cmax->get_y(), 0);
+		glVertex3i(cmin->get_x(), cmax->get_y(), 0);
+		glVertex3i(cmin->get_x(), cmax->get_y(), 0);
+		glVertex3i(cmin->get_x(), cmin->get_y(), 0);
 		glEnd();
 	}
 }
@@ -478,7 +544,7 @@ void menu_handler(int value)
 			cin >> extrusion_length; // Check for positive or something else?
 			cout << "You selected " << extrusion_length << " as the extrusion length." << endl;
 			for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
-				p->extrusion_length = extrusion_length;
+				p->set_extrusion_length(extrusion_length);
 #endif
 			break;
 		case MENU_EXIT3D:
@@ -500,33 +566,27 @@ void keyboard_event_handler(unsigned char key, int x, int y)
 			show_triangles = !show_triangles;
 			break;
 		case 'W':
-		case 'w':
-			// move camera up
+		case 'w': // move camera up
 			posz -= 2.0;
 			break;
 		case 'S':
-		case 's':
-			// move camera down
+		case 's': // move camera down
 			posz += 2.0;
 			break;
 		case 'A':
-		case 'a':
-			// move camera left
+		case 'a': // move camera left
 			posx -= 2.0;
 			break;
 		case 'D':
-		case 'd':
-			// move camera right
+		case 'd': // move camera right
 			posx += 2.0;
 			break;
 		case 'I':
-		case 'i':
-			// move camera in
+		case 'i': // move camera in
 			posy -= 2.0;
 			break;
 		case 'O':
-		case 'o':
-			// move camera out
+		case 'o': // move camera out
 			posy += 2.0;
 			break;
 	}
@@ -545,8 +605,8 @@ void mouse_event_handler(int button, int state, int x, int y)
 		glutDetachMenu(GLUT_RIGHT_BUTTON);
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
 		{
-			polygons.back().vertices.push_back(Vertex(x, y));
-			triangulate(&(polygons.back())); // To allow area coloring
+			polygons.back().get_vertices().push_back(Vertex(x, y));
+			triangulate(&(polygons.back())); // To allow area coloring (on the fly)
 #ifdef DRAW_LAST_EDGE_SINCE_START
 			if (intersecting_polygon(&polygons.back()) == true)
 #else
@@ -573,7 +633,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 				removed_polygon = true;
 			}
 #endif
-			if (created_polygon == true && polygons.back().vertices.size() < MIN_VERTEX_NUM)
+			if (created_polygon == true && polygons.back().get_vertices().size() < MIN_VERTEX_NUM)
 			{
 
 				cerr << "At least " << MIN_VERTEX_NUM << " vertices are required to" <<
@@ -606,7 +666,7 @@ void mouse_event_handler(int button, int state, int x, int y)
 				if (intersecting_polygon(&(polygons[editing_polygon_index]), false) == true)
 #endif
 				{
-					moving_vertex->update(old_vertex->x, old_vertex->y);
+					moving_vertex->update(old_vertex->get_x(), old_vertex->get_y());
 					cerr << "Cannot move vertex. Resulted in an intersecting polygon!" << endl;
 				}
 				else // In case a vertex has been updated
@@ -620,12 +680,12 @@ void mouse_event_handler(int button, int state, int x, int y)
 		}
 
 		for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
-			for (unsigned int i = 0; i < p->vertices.size(); i++)
+			for (unsigned int i = 0; i < p->get_vertices().size(); i++)
 			{
-				if (p->vertices[i].in_range(x, y, 10))
+				if (p->get_vertices()[i].in_range(x, y, 10))
 				{
 					editing_polygon_index = p - polygons.begin();
-					moving_vertex = &(p->vertices[i]);
+					moving_vertex = &(p->get_vertices()[i]);
 				}
 			}
 	}
@@ -649,9 +709,8 @@ void mouse_event_handler(int button, int state, int x, int y)
 			}
 			else
 			{
-				cmin = new Vertex(min(v0->x,v1->x), min(v0->y, v1->y));
-				cmax = new Vertex(max(v0->x,v1->x), max(v0->y, v1->y));
-//				cout << "(" << cmin->x << "," << cmin->y << ") - (" << cmax->x << "," << cmax->y << ")" << endl;
+				cmin = new Vertex(min(v0->get_x(),v1->get_x()), min(v0->get_y(), v1->get_y()));
+				cmax = new Vertex(max(v0->get_x(),v1->get_x()), max(v0->get_y(), v1->get_y()));
 				glutTimerFunc(0, timer_func, CLIPPING_START);
 				for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 				{
@@ -695,17 +754,17 @@ void draw_polygon_bounds(void)
 	glBegin(GL_LINES);
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
-		glColor3ub(COLOR_TO_RGB(p->line_clr));
-		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		glColor3ub(COLOR_TO_RGB(p->get_line_clr()));
+		for (unsigned int i = 0, j; i < p->get_vertices().size(); i++)
 		{
 #ifndef DRAW_LAST_EDGE_SINCE_START
-			if (::state == DRAWING_POLYGON && *p == polygons.back() && i == p->vertices.size()-1)
+			if (::state == DRAWING_POLYGON && *p == polygons.back() && i == p->get_vertices().size()-1)
 				continue;
 #endif
-			j = (i + 1) % p->vertices.size();
-			glLine3i(p->vertices[i], p->vertices[j], 0);
+			j = (i + 1) % p->get_vertices().size();
+			glLine3i(p->get_vertices()[i], p->get_vertices()[j], 0);
 			if (::state == EXTRUSION)
-				glLine3i(p->vertices[i], p->vertices[j], -(p->extrusion_length));
+				glLine3i(p->get_vertices()[i], p->get_vertices()[j], -(p->get_extrusion_length()));
 		}
 	}
 	glEnd();
@@ -718,55 +777,34 @@ void draw_polygon_quads(void)
 
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
-#if 1
 		glBegin(GL_QUADS);
-		glColor3ub(COLOR_TO_RGB(p->line_clr));
-		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
+		glColor3ub(COLOR_TO_RGB(p->get_line_clr()));
+		for (unsigned int i = 0, j; i < p->get_vertices().size(); i++)
 		{
-			Vertex *v0 = &(p->vertices[i]);
-			j = (i + 1) % p->vertices.size();
-			Vertex *v1 = &(p->vertices[j]);
+			Vertex *v0 = &(p->get_vertices()[i]);
+			j = (i + 1) % p->get_vertices().size();
+			Vertex *v1 = &(p->get_vertices()[j]);
 
-			glVertex3i(v0->x, v0->y, -(p->extrusion_length));
-			glVertex3i(v1->x, v1->y, -(p->extrusion_length));
-			glVertex3i(v1->x, v1->y, 0);
-			glVertex3i(v0->x, v0->y, 0);
+			glVertex3i(v0->get_x(), v0->get_y(), -(p->get_extrusion_length()));
+			glVertex3i(v1->get_x(), v1->get_y(), -(p->get_extrusion_length()));
+			glVertex3i(v1->get_x(), v1->get_y(), 0);
+			glVertex3i(v0->get_x(), v0->get_y(), 0);
 		}
 		glEnd();
-#else
-		glBegin(GL_TRIANGLES);
-		glColor3ub(COLOR_TO_RGB(p->line_clr));
-		for (unsigned int i = 0, j; i < p->vertices.size(); i++)
-		{
-			j = (i + 1) % p->vertices.size();
-			Vertex *v0 = &(p->vertices[i]);
-			Vertex *v1 = &(p->vertices[j]);
-
-			/* triangle 1 */
-			glVertex3i(v0->x, v0->y, -(p->extrusion_length));
-			glVertex3i(v1->x, v1->y, -(p->extrusion_length));
-			glVertex3i(v0->x, v0->y, 0);
-			/* triangle 2 */
-			glVertex3i(v0->x, v0->y, 0);
-			glVertex3i(v1->x, v1->y, -(p->extrusion_length));
-			glVertex3i(v1->x, v1->y, 0);
-		}
-		glEnd();
-#endif
 	}
 }
 
 inline void glTriangle3i(Vertex v0, Vertex v1, Vertex v2, int z)
 {
-	glVertex3i(v0.x, v0.y, z);
-	glVertex3i(v1.x, v1.y, z);
-	glVertex3i(v2.x, v2.y, z);
+	glVertex3i(v0.get_x(), v0.get_y(), z);
+	glVertex3i(v1.get_x(), v1.get_y(), z);
+	glVertex3i(v2.get_x(), v2.get_y(), z);
 }
 
 inline void glLine3i(Vertex v0, Vertex v1, int z)
 {
-	glVertex3i(v0.x, v0.y, z);
-	glVertex3i(v1.x, v1.y, z);
+	glVertex3i(v0.get_x(), v0.get_y(), z);
+	glVertex3i(v1.get_x(), v1.get_y(), z);
 }
 
 void draw_polygon_area()
@@ -779,13 +817,13 @@ void draw_polygon_area()
 		if (::state == DRAWING_POLYGON && *p == polygons.back())
 			continue;
 #endif
-		glColor3ub(COLOR_TO_RGB(p->fill_clr));
-		for (unsigned int i = 0; i < p->triangles.size(); i++)
+		glColor3ub(COLOR_TO_RGB(p->get_fill_clr()));
+		for (unsigned int i = 0; i < p->get_triangles().size(); i++)
 		{
-			Triangle *t = &(p->triangles[i]);
-			glTriangle3i(t->v0, t->v1, t->v2, 0);
+			Triangle *t = &(p->get_triangles()[i]);
+			glTriangle3i(t->get_v0(), t->get_v1(), t->get_v2(), 0);
 			if (::state == EXTRUSION)
-				glTriangle3i(t->v0, t->v1, t->v2, -(p->extrusion_length));
+				glTriangle3i(t->get_v0(), t->get_v1(), t->get_v2(), -(p->get_extrusion_length()));
 		}
 	}
 	glEnd();
@@ -799,23 +837,23 @@ void draw_polygon_triangles()
 	for (vector<Polygon>::iterator p = polygons.begin(); p != polygons.end(); p++)
 	{
 		int z1 = 1, z2 = -1;
-		if (p->extrusion_length < 0)
+		if (p->get_extrusion_length() < 0)
 		{
 			z1 = -1;
 			z2 = 1;
 		}
-		for (unsigned int i = 0; i < p->triangles.size(); i++)
+		for (unsigned int i = 0; i < p->get_triangles().size(); i++)
 		{
-			Triangle *t = &(p->triangles[i]);
-			glLine3i(t->v0, t->v1, z1);
-			glLine3i(t->v1, t->v2, z1);
-			glLine3i(t->v2, t->v0, z1);
+			Triangle *t = &(p->get_triangles()[i]);
+			glLine3i(t->get_v0(), t->get_v1(), z1);
+			glLine3i(t->get_v1(), t->get_v2(), z1);
+			glLine3i(t->get_v2(), t->get_v0(), z1);
 
 			if (::state == EXTRUSION)
 			{
-				glLine3i(t->v0, t->v1, -(p->extrusion_length) + z2);
-				glLine3i(t->v1, t->v2, -(p->extrusion_length) + z2);
-				glLine3i(t->v2, t->v0, -(p->extrusion_length) + z2);
+				glLine3i(t->get_v0(), t->get_v1(), -(p->get_extrusion_length()) + z2);
+				glLine3i(t->get_v1(), t->get_v2(), -(p->get_extrusion_length()) + z2);
+				glLine3i(t->get_v2(), t->get_v0(), -(p->get_extrusion_length()) + z2);
 			}
 		}
 	}
@@ -856,7 +894,7 @@ Vertex *intersection(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, bool ignore
 
 inline float crossproduct(Vertex v1, Vertex v2)
 {
-	return ((v2.y * v1.x) - (v2.x * v1.y));
+	return ((v2.get_y() * v1.get_x()) - (v2.get_x() * v1.get_y()));
 }
 
 #ifdef DRAW_LAST_EDGE_SINCE_START
@@ -866,7 +904,7 @@ bool intersecting_polygon(Polygon *p, bool ignore_last_edge)
 #endif
 {
 	unsigned int i, j;
-	unsigned int vnum = p->vertices.size();
+	unsigned int vnum = p->get_vertices().size();
 
 	if (vnum < 4)
 		return false;
@@ -879,14 +917,11 @@ bool intersecting_polygon(Polygon *p, bool ignore_last_edge)
 			if (ignore_last_edge && (i == vnum-1 || j == vnum-1))
 				continue;
 #endif
-			if (intersection(&(p->vertices[i]),
-						&(p->vertices[i+1]),
-						&(p->vertices[j]),
-						&(p->vertices[(j+1) % vnum]), true) != NULL)
+			if (intersection(&(p->get_vertices()[i]),
+						&(p->get_vertices()[i+1]),
+						&(p->get_vertices()[j]),
+						&(p->get_vertices()[(j+1) % vnum]), true) != NULL)
 			{
-//				cout << "INTERSECTS" << endl;
-//				cout << p->vertices[i] << p->vertices[i+1] <<
-//					p->vertices[j] << p->vertices[(j+1)%vnum] << endl;
 				return true;
 			}
 		}
@@ -900,20 +935,20 @@ void sh_clip(Polygon *p)
 	if (cmin == NULL || cmax == NULL || p == NULL)
 		return;
 
+	// Clipping polygon
 	Vertex cp[8] = {
-		Vertex(0, cmin->y),
-		Vertex(WINDOW_WIDTH, cmin->y),
-		Vertex(cmax->x, 0),
-		Vertex(cmax->x, WINDOW_HEIGHT),
-		Vertex(WINDOW_WIDTH, cmax->y),
-		Vertex(0, cmax->y),
-		Vertex(cmin->x, WINDOW_HEIGHT),
-		Vertex(cmin->x, 0)
+		Vertex(0, cmin->get_y()),
+		Vertex(WINDOW_WIDTH, cmin->get_y()),
+		Vertex(cmax->get_x(), 0),
+		Vertex(cmax->get_x(), WINDOW_HEIGHT),
+		Vertex(WINDOW_WIDTH, cmax->get_y()),
+		Vertex(0, cmax->get_y()),
+		Vertex(cmin->get_x(), WINDOW_HEIGHT),
+		Vertex(cmin->get_x(), 0)
 	};
 
-	vector<Vertex> output_list = p->vertices;
+	vector<Vertex> output_list = p->get_vertices();
 	Vertex *cp0, *cp1, *ip;
-//	unsigned int count = 0;
 
 	for (int j = 0; j < 8; j += 2)
 	{
@@ -933,7 +968,6 @@ void sh_clip(Polygon *p)
 				if (!inside_clip_edge(*s, *cp0, *cp1))
 				{
 					// Case 4: incoming
-//					count--;
 					ip = intersection(s, e, cp0, cp1, false);
 					if (ip != NULL)
 						output_list.push_back(*ip);
@@ -946,7 +980,6 @@ void sh_clip(Polygon *p)
 			else if (inside_clip_edge(*s, *cp0, *cp1))
 			{
 				// Case 2: outgoing
-//				count++;
 				ip = intersection(s, e, cp0, cp1, false);
 				if (ip != NULL)
 					output_list.push_back(*ip);
@@ -957,24 +990,24 @@ void sh_clip(Polygon *p)
 			s = e;
 		}
 	}
-	p->vertices = output_list;
+	p->get_vertices() = output_list;
 }
 
 bool inside_clip_edge(Vertex p, Vertex cp1, Vertex cp2)
 {
-	if (cp1.x == cp2.x)
+	if (cp1.get_x() == cp2.get_x())
 	{
-		if (cp1.y < cp2.y)
-			return p.x < cp1.x;
+		if (cp1.get_y() < cp2.get_y())
+			return p.get_x() < cp1.get_x();
 		else
-			return p.x > cp1.x;
+			return p.get_x() > cp1.get_x();
 	}
-	else if (cp1.y == cp2.y)
+	else if (cp1.get_y() == cp2.get_y())
 	{
-		if (cp1.x < cp2.x)
-			return p.y > cp1.y;
+		if (cp1.get_x() < cp2.get_x())
+			return p.get_y() > cp1.get_y();
 		else
-			return p.y < cp1.y;
+			return p.get_y() < cp1.get_y();
 	}
 	return false;
 }
@@ -987,22 +1020,21 @@ void triangulate(Polygon *p)
 	if (p == NULL)
 		return;
 
-	p->triangles.clear();
-	Process(p->vertices, result);
+	p->get_triangles().clear();
+	Process(p->get_vertices(), result);
 
 	for (i = 0; i < result.size(); i += 3)
 	{
-		p->triangles.push_back(Triangle(
+		p->get_triangles().push_back(Triangle(
 					result[i],
 					result[i+1],
 					result[i+2]));
 	}
-//	cout << "Triangulated: " << p->triangles.size() << endl;
 }
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//                      Given Triangulation Code (Modified)
+//                Given Triangulation Code (Slightly Adjusted)
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <stdio.h>
@@ -1027,7 +1059,7 @@ float Area(const vector<Vertex> &contour)
 	float A=0.0f;
 
 	for(int p=n-1,q=0; q<n; p=q++)
-		A+= contour[p].x*contour[q].y - contour[q].x*contour[p].y;
+		A+= contour[p].get_x()*contour[q].get_y() - contour[q].get_x()*contour[p].get_y();
 	return A*0.5f;
 }
 
@@ -1059,14 +1091,14 @@ bool Snip(const vector<Vertex> &contour,int u,int v,int w,int n,int *V)
 	int p;
 	float Ax, Ay, Bx, By, Cx, Cy, Px, Py;
 
-	Ax = contour[V[u]].x;
-	Ay = contour[V[u]].y;
+	Ax = contour[V[u]].get_x();
+	Ay = contour[V[u]].get_y();
 
-	Bx = contour[V[v]].x;
-	By = contour[V[v]].y;
+	Bx = contour[V[v]].get_x();
+	By = contour[V[v]].get_y();
 
-	Cx = contour[V[w]].x;
-	Cy = contour[V[w]].y;
+	Cx = contour[V[w]].get_x();
+	Cy = contour[V[w]].get_y();
 
 	if ( EPSILON > (((Bx-Ax)*(Cy-Ay)) - ((By-Ay)*(Cx-Ax))) ) return false;
 
@@ -1074,8 +1106,8 @@ bool Snip(const vector<Vertex> &contour,int u,int v,int w,int n,int *V)
 	{
 		if( (p == u) || (p == v) || (p == w) )
 			continue;
-		Px = contour[V[p]].x;
-		Py = contour[V[p]].y;
+		Px = contour[V[p]].get_x();
+		Py = contour[V[p]].get_y();
 		if (InsideTriangle(Ax,Ay,Bx,By,Cx,Cy,Px,Py))
 			return false;
 	}
@@ -1151,3 +1183,4 @@ bool Process(const vector<Vertex> &contour,vector<Vertex> &result)
 
 	return true;
 }
+
