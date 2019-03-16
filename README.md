@@ -23,3 +23,5 @@ __Bonus__
 ### Note
 Currently I have no time to write a proper README.
 
+## License
+[GNU GENERAL PUBLIC LICENSE Version 2, June 1991](LICENSE)
